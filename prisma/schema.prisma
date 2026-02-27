@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Источники трендов (Hacker News, Google Trends, NewsAPI и др.)
+model TrendSource {
+  id        String   @id @default(cuid())
+  name      String   @unique // "hacker_news", "google_trends", "news_api"
+  label     String           // "Hacker News", "Google Trends", "NewsAPI"
+  enabled   Boolean  @default(true)
+  config    String?          // JSON: дополнительные настройки
+  lastRunAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+// Собранные тренды из источников
+model TrendData {
+  id        String   @id @default(cuid())
+  sourceId  String           // Ссылка на TrendSource.name
+  title     String           // Заголовок тренда
+  url       String?          // Ссылка на источник
+  score     Int      @default(0) // Очки популярности (0-100)
+  summary   String?          // Краткое описание
+  category  String?          // Категория: "tech", "business", "ai"
+  metadata  String?          // JSON: доп. данные из источника
+  fetchedAt DateTime @default(now())
+
+  @@index([sourceId, fetchedAt])
+}
+
+// Ежедневные отчёты
+model DailyReport {
+  id          String    @id @default(cuid())
+  date        DateTime  @unique // Одна дата = один отчёт
+  status      String    @default("pending") // pending, generating, complete, failed
+  trendsCount Int       @default(0)
+  ideasCount  Int       @default(0)
+  aiModel     String?
+  aiTokensIn  Int?
+  aiTokensOut Int?
+  error       String?   // Ошибка, если статус failed
+  generatedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  ideas BusinessIdea[]
+}
+
+// Бизнес-идеи, сгенерированные AI
+model BusinessIdea {
+  id               String      @id @default(cuid())
+  reportId         String
+  report           DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  name             String
+  emoji            String      @default("💡")
+  description      String
+  targetAudience   String      // Целевая аудитория
+  monetization     String      // Как зарабатывать
+  startupCost      String      // "low", "medium", "high" + описание
+  competitionLevel String      // "low", "medium", "high"
+  trendBacking     String      // Какие тренды подтверждают идею
+  actionPlan       String      // Пошаговый план
+  claudeCodeReady  Boolean     @default(false) // Можно реализовать через Claude Code?
+  difficulty       String      @default("medium") // easy, medium, hard
+  rating           Int?        // Оценка пользователя 1-5
+  isFavorite       Boolean     @default(false)
+  isArchived       Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+
+  @@index([reportId])
+}
+
+// Глобальные настройки (одна запись с id="main")
+model Settings {
+  id                String @id @default("main")
+  anthropicApiKey   String?
+  newsApiKey        String?
+  googleTrendsGeo   String @default("US")
+  maxIdeasPerReport Int    @default(10)
+  preferredModel    String @default("claude-haiku-4-5-20251001")
+}
