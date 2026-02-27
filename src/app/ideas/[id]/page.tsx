@@ -135,6 +135,59 @@ export default function IdeaDetailPage({
         </span>
       </div>
 
+      {/* Ключевые метрики */}
+      {(idea.successChance != null || idea.estimatedRevenue || idea.timeToLaunch) && (
+        <div className="mb-6 grid grid-cols-3 gap-3">
+          {idea.successChance != null && (
+            <div
+              className="rounded-2xl p-4 text-center"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+            >
+              <div className="mb-1 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+                Шанс успеха
+              </div>
+              <div className="text-2xl font-bold" style={{
+                color: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
+              }}>
+                {idea.successChance}%
+              </div>
+              <div className="mx-auto mt-2 h-1.5 w-full max-w-[80px] overflow-hidden rounded-full" style={{ backgroundColor: "var(--muted)" }}>
+                <div className="h-full rounded-full" style={{
+                  width: `${idea.successChance}%`,
+                  backgroundColor: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
+                }} />
+              </div>
+            </div>
+          )}
+          {idea.estimatedRevenue && (
+            <div
+              className="rounded-2xl p-4 text-center"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+            >
+              <div className="mb-1 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+                Доход за 3 мес.
+              </div>
+              <div className="text-sm font-bold" style={{ color: "var(--success)" }}>
+                {idea.estimatedRevenue}
+              </div>
+            </div>
+          )}
+          {idea.timeToLaunch && (
+            <div
+              className="rounded-2xl p-4 text-center"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+            >
+              <div className="mb-1 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+                Время до MVP
+              </div>
+              <div className="text-sm font-bold" style={{ color: "var(--primary)" }}>
+                {idea.timeToLaunch}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Карточки с деталями */}
       <div className="space-y-4">
         <InfoBlock title="Описание" content={idea.description} />

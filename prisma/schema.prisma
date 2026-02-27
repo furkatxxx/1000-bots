@@ -66,6 +66,9 @@ model BusinessIdea {
   actionPlan       String      // Пошаговый план
   claudeCodeReady  Boolean     @default(false) // Можно реализовать через Claude Code?
   difficulty       String      @default("medium") // easy, medium, hard
+  successChance    Int?        // Шанс успеха 1-100 (оценка AI)
+  estimatedRevenue String?     // Ожидаемый доход за 3 месяца
+  timeToLaunch     String?     // Время до запуска (например "14 дней")
   rating           Int?        // Оценка пользователя 1-5
   isFavorite       Boolean     @default(false)
   isArchived       Boolean     @default(false)

@@ -5,6 +5,7 @@ import type { ReportDTO } from "@/lib/types";
 
 export function useReports() {
   const [reports, setReports] = useState<ReportDTO[]>([]);
+  const [favoritesCount, setFavoritesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,6 +17,7 @@ export function useReports() {
       if (!res.ok) throw new Error("Ошибка загрузки отчётов");
       const data = await res.json();
       setReports(data.reports);
+      setFavoritesCount(data.favoritesCount || 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Неизвестная ошибка");
     } finally {
@@ -27,5 +29,5 @@ export function useReports() {
     fetch_();
   }, [fetch_]);
 
-  return { reports, loading, error, refetch: fetch_ };
+  return { reports, favoritesCount, loading, error, refetch: fetch_ };
 }

@@ -1,82 +1,75 @@
 # Прогресс проекта 1000 ботов
 
-## Текущая фаза: ВСЕ ФАЗЫ ЗАВЕРШЕНЫ
-## Статус: Проект готов к запуску и тестированию
+## Текущая фаза: Фаза 7 завершена
+## Статус: AI-мозг улучшен, все фичи работают, ожидается пополнение Anthropic
 ## Последнее обновление: 2026-02-27
 
 ---
 
 ### Фаза 0: Скелет ✅
-- [x] package.json
-- [x] tsconfig.json, next.config.ts, postcss.config.mjs
-- [x] .env, .env.local, .gitignore
-- [x] prisma/schema.prisma (5 таблиц)
-- [x] src/app/globals.css (Apple-дизайн)
-- [x] src/app/layout.tsx (корневой layout)
-- [x] src/components/layout/Sidebar.tsx
-- [x] src/components/layout/Providers.tsx
-- [x] src/components/ui/Toast.tsx
-- [x] src/lib/db.ts, types.ts, utils.ts
-- [x] Страницы-заглушки: дашборд, отчёты, тренды, настройки
+- [x] package.json, tsconfig, next.config, postcss
+- [x] Prisma схема (5 таблиц) + SQLite
+- [x] Apple-дизайн (globals.css)
+- [x] Layout + Sidebar + Toast
 - [x] CLAUDE.md, PROGRESS.md
-- [x] npm install (120 пакетов)
-- [x] npx prisma generate + db push (dev.db создана)
-- [x] npm run build — ✅ без ошибок
-- [x] git init
 
 ### Фаза 1: Сбор трендов ✅
-- [x] src/lib/collectors/base.ts
-- [x] src/lib/collectors/hacker-news.ts
-- [x] src/lib/collectors/google-trends.ts
-- [x] src/lib/collectors/news-api.ts
-- [x] src/lib/collectors/index.ts
-- [x] src/app/api/trends/route.ts
-- [x] npm run build — ✅ без ошибок
+- [x] 3 коллектора: HackerNews, GoogleTrends, NewsAPI
+- [x] API /api/trends (GET + POST)
+- [x] Перевод заголовков на русский (google-translate-api-x)
 
-### Фаза 2: AI-мозг + генерация отчётов ✅
-- [x] src/lib/ai-brain.ts
-- [x] src/app/api/reports/route.ts (GET список + POST генерация)
-- [x] src/app/api/reports/[id]/route.ts (GET один отчёт)
-- [x] src/app/api/ideas/[id]/route.ts (GET + PATCH)
-- [x] src/app/api/settings/route.ts (GET + POST)
-- [x] npm run build — ✅ без ошибок
+### Фаза 2: AI-мозг ✅
+- [x] ai-brain.ts — промпт с few-shot примерами
+- [x] API /api/reports (GET + POST генерация)
+- [x] API /api/ideas/[id] (GET + PATCH)
+- [x] API /api/settings (GET + POST)
 
-### Фаза 3: Дашборд + UI отчётов ✅
-- [x] src/hooks/useReports.ts
-- [x] src/hooks/useReport.ts
-- [x] src/hooks/useGenerate.ts
-- [x] src/hooks/useSettings.ts
-- [x] src/components/ui/IdeaCard.tsx
-- [x] src/components/ui/QuickStat.tsx
-- [x] src/components/ui/SkeletonCard.tsx
-- [x] src/components/dashboard/TodayReport.tsx
-- [x] Обновлён дашборд (src/app/page.tsx)
-- [x] Обновлён список отчётов (src/app/reports/page.tsx)
-- [x] npm run build — ✅ без ошибок
+### Фаза 3: Дашборд + UI ✅
+- [x] Хуки: useReports, useReport, useGenerate, useSettings
+- [x] Компоненты: IdeaCard, QuickStat, SkeletonCard, TodayReport
+- [x] Дашборд с метриками и топ-идеями
 
-### Фаза 4: Детальные страницы + настройки ✅
-- [x] src/app/reports/[id]/page.tsx (детали отчёта с идеями)
-- [x] src/app/ideas/[id]/page.tsx (детали идеи, рейтинг, избранное)
-- [x] src/app/trends/page.tsx (список трендов с фильтрами)
-- [x] src/app/settings/page.tsx (рабочая форма настроек)
-- [x] npm run build — ✅ без ошибок
+### Фаза 4: Детальные страницы ✅
+- [x] Детали отчёта с идеями
+- [x] Детали идеи (рейтинг, избранное, все поля)
+- [x] Тренды с фильтрами по источникам
+- [x] Настройки (API-ключи, модель, регион, источники)
 
 ### Фаза 5: Полировка ✅
-- [x] Мобильная адаптация (сайдбар — drawer)
 - [x] Анимации (fade-in, slide-up, skeleton-pulse)
-- [x] Скелетоны загрузки на всех страницах
-- [x] Apple-стиль скроллбар
-- [x] Focus-visible стили
-- [x] npm run build — ✅ без ошибок
+- [x] Скелетоны загрузки
+- [x] Apple-стиль, тёмная тема
+
+### Фаза 6: Качество AI-мозга ✅
+- [x] Few-shot примеры в промпте
+- [x] Фильтры качества (бюджет до $1000, без физ.производства)
+- [x] Контекст AI-агентов в промпте
+- [x] Новые поля: successChance, estimatedRevenue, timeToLaunch
+- [x] Дедупликация (не повторяет идеи из прошлых 3 отчётов)
+- [x] Валидация ответа AI + retry (до 2 попыток)
+- [x] max_tokens увеличен до 8192
+
+### Фаза 7: Доработки UI ✅
+- [x] Выбор модели Claude (Haiku/Sonnet) в настройках
+- [x] Переключатели вкл/выкл источников
+- [x] API /api/trends/sources (GET + POST)
+- [x] Реальный счётчик избранных на дашборде
+- [x] Метрики на странице идеи (шанс, доход, время до MVP)
+- [x] Прогресс-бар шанса успеха на карточке идеи
+
+### Фаза 8: Git ✅
+- [x] git init + первый коммит (154662c)
+- [x] Второй коммит с улучшениями
 
 ---
 
-## Что нужно для запуска:
-1. Получить Anthropic API Key: https://console.anthropic.com/settings/keys
-2. Открыть настройки (http://localhost:1000/settings)
-3. Вставить ключ
-4. Нажать "Сгенерировать отчёт" на дашборде
+## Блокер
+Anthropic аккаунт — $0. Пополнить на console.anthropic.com → Plans & Billing ($5 минимум).
 
-## Необязательно:
-- NewsAPI Key (https://newsapi.org/register) — для новостей
-- Без него будут работать Hacker News + Google Trends
+## Что запустить
+```bash
+cd ~/Desktop/KLOUD/1000-bots
+export PATH="$HOME/.local/node/bin:$PATH"
+npm run dev
+# Открыть http://localhost:1000
+```

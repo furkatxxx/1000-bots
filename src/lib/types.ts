@@ -29,6 +29,9 @@ export interface GeneratedIdea {
   actionPlan: string;
   claudeCodeReady: boolean;
   difficulty: string;
+  successChance: number;
+  estimatedRevenue: string;
+  timeToLaunch: string;
 }
 
 // Результат генерации отчёта
@@ -66,6 +69,9 @@ export interface IdeaDTO {
   actionPlan: string;
   claudeCodeReady: boolean;
   difficulty: string;
+  successChance: number | null;
+  estimatedRevenue: string | null;
+  timeToLaunch: string | null;
   rating: number | null;
   isFavorite: boolean;
   isArchived: boolean;

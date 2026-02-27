@@ -12,6 +12,12 @@ export default function SettingsPage() {
   const [newsKey, setNewsKey] = useState("");
   const [geo, setGeo] = useState("US");
   const [maxIdeas, setMaxIdeas] = useState(10);
+  const [model, setModel] = useState("claude-haiku-4-5-20251001");
+  const [sources, setSources] = useState({
+    hacker_news: true,
+    google_trends: true,
+    news_api: true,
+  });
 
   // Заполняем форму когда настройки загрузились
   useEffect(() => {
@@ -20,14 +26,39 @@ export default function SettingsPage() {
       setNewsKey(settings.newsApiKey || "");
       setGeo(settings.googleTrendsGeo || "US");
       setMaxIdeas(settings.maxIdeasPerReport || 10);
+      setModel(settings.preferredModel || "claude-haiku-4-5-20251001");
     }
   }, [settings]);
+
+  // Загружаем состояние источников
+  useEffect(() => {
+    fetch("/api/trends/sources")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.sources) {
+          const map: Record<string, boolean> = {};
+          for (const s of data.sources) {
+            map[s.name] = s.enabled;
+          }
+          setSources((prev) => ({ ...prev, ...map }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSave() {
     const updates: Record<string, unknown> = {
       googleTrendsGeo: geo,
       maxIdeasPerReport: maxIdeas,
+      preferredModel: model,
     };
+
+    // Сохраняем состояние источников
+    fetch("/api/trends/sources", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sources }),
+    }).catch(() => {});
 
     // Отправляем ключи только если пользователь ввёл новые (не маскированные)
     if (anthropicKey && !anthropicKey.includes("••••")) {
@@ -120,6 +151,24 @@ export default function SettingsPage() {
           </select>
         </div>
 
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            Модель Claude
+          </label>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          >
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (быстро, дёшево ~$0.02)</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 (умнее, ~$0.15)</option>
+          </select>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Haiku — быстрый и дешёвый, Sonnet — глубже анализирует
+          </p>
+        </div>
+
         <div className="mb-6">
           <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
             Максимум идей в отчёте
@@ -133,6 +182,39 @@ export default function SettingsPage() {
             className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
             style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
           />
+        </div>
+
+        {/* Источники трендов */}
+        <h2 className="mb-4 text-lg font-semibold">Источники трендов</h2>
+
+        <div className="mb-6 space-y-3">
+          {[
+            { key: "hacker_news", label: "Hacker News", desc: "Технологии, стартапы, программирование" },
+            { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы" },
+            { key: "news_api", label: "NewsAPI", desc: "Новости и статьи (нужен ключ)" },
+          ].map((source) => (
+            <label
+              key={source.key}
+              className="flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all duration-200"
+              style={{
+                borderColor: sources[source.key as keyof typeof sources] ? "var(--primary)" : "var(--border)",
+                backgroundColor: sources[source.key as keyof typeof sources] ? "var(--primary-light, #0071e308)" : "transparent",
+              }}
+            >
+              <div>
+                <div className="text-sm font-medium">{source.label}</div>
+                <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  {source.desc}
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={sources[source.key as keyof typeof sources]}
+                onChange={(e) => setSources((prev) => ({ ...prev, [source.key]: e.target.checked }))}
+                className="h-5 w-5 cursor-pointer rounded accent-[var(--primary)]"
+              />
+            </label>
+          ))}
         </div>
 
         {/* Кнопка сохранения */}

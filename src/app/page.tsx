@@ -10,7 +10,7 @@ import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import { useReport } from "@/hooks/useReport";
 
 export default function DashboardPage() {
-  const { reports, loading: loadingReports, refetch: refetchReports } = useReports();
+  const { reports, favoritesCount, loading: loadingReports, refetch: refetchReports } = useReports();
   const { generate, generating } = useGenerate();
   const { showToast } = useToast();
 
@@ -48,7 +48,7 @@ export default function DashboardPage() {
         <QuickStat icon="📊" label="Отчётов" value={totalReports} />
         <QuickStat icon="💡" label="Идей" value={totalIdeas} />
         <QuickStat icon="📈" label="Трендов" value={totalTrends} />
-        <QuickStat icon="⭐" label="Избранных" value="—" />
+        <QuickStat icon="⭐" label="Избранных" value={favoritesCount} />
       </div>
 
       {/* Сегодняшний отчёт */}

@@ -10,6 +10,11 @@ export async function GET() {
     include: { _count: { select: { ideas: true } } },
   });
 
+  // Считаем избранные идеи
+  const favoritesCount = await prisma.businessIdea.count({
+    where: { isFavorite: true },
+  });
+
   return NextResponse.json({
     reports: reports.map((r) => ({
       id: r.id,
@@ -21,6 +26,7 @@ export async function GET() {
       generatedAt: r.generatedAt?.toISOString() || null,
       createdAt: r.createdAt.toISOString(),
     })),
+    favoritesCount,
   });
 }
 
@@ -73,7 +79,21 @@ export async function POST() {
       });
     }
 
-    // 2. Генерируем идеи через AI
+    // 2. Собираем названия прошлых идей для дедупликации
+    const recentIdeas = await prisma.businessIdea.findMany({
+      where: {
+        report: {
+          id: { not: report.id },
+          status: "complete",
+        },
+      },
+      select: { name: true },
+      orderBy: { createdAt: "desc" },
+      take: 30, // Последние 30 идей (~3 отчёта)
+    });
+    const previousIdeas = recentIdeas.map((i) => i.name);
+
+    // 3. Генерируем идеи через AI
     const result = await generateIdeas({
       trends: trendItems.map((t) => ({
         title: t.title,
@@ -84,6 +104,7 @@ export async function POST() {
       maxIdeas: settings.maxIdeasPerReport || 10,
       model: settings.preferredModel || "claude-haiku-4-5-20251001",
       apiKey: settings.anthropicApiKey,
+      previousIdeas,
     });
 
     // 3. Сохраняем идеи
@@ -102,6 +123,9 @@ export async function POST() {
           actionPlan: idea.actionPlan,
           claudeCodeReady: idea.claudeCodeReady,
           difficulty: idea.difficulty,
+          successChance: idea.successChance,
+          estimatedRevenue: idea.estimatedRevenue,
+          timeToLaunch: idea.timeToLaunch,
         },
       });
     }

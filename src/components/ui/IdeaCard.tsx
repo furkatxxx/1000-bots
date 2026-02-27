@@ -84,9 +84,35 @@ export const IdeaCard = React.memo(function IdeaCard({
         {idea.description}
       </p>
 
+      {/* Шанс успеха — прогресс-бар */}
+      {idea.successChance != null && (
+        <div className="mb-3">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+              Шанс успеха
+            </span>
+            <span className="text-xs font-bold" style={{
+              color: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
+            }}>
+              {idea.successChance}%
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--muted)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${idea.successChance}%`,
+                backgroundColor: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <Tag label="Аудитория" value={idea.targetAudience} />
         <Tag label="Монетизация" value={idea.monetization} />
+        {idea.timeToLaunch && <Tag label="Запуск" value={idea.timeToLaunch} />}
       </div>
 
       {idea.rating && (
