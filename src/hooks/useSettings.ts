@@ -9,6 +9,8 @@ interface Settings {
   googleTrendsGeo: string;
   maxIdeasPerReport: number;
   preferredModel: string;
+  telegramBotToken: string;
+  telegramChatId: string;
 }
 
 export function useSettings() {

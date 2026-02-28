@@ -52,9 +52,15 @@ export async function PATCH(
     data,
   });
 
+  let expertAnalysis = null;
+  if (updated.expertAnalysis) {
+    try { expertAnalysis = JSON.parse(updated.expertAnalysis); } catch { /* skip */ }
+  }
+
   return NextResponse.json({
     idea: {
       ...updated,
+      expertAnalysis,
       createdAt: updated.createdAt.toISOString(),
     },
   });
@@ -76,9 +82,20 @@ export async function GET(
     );
   }
 
+  // Парсим expertAnalysis из JSON-строки в объект
+  let expertAnalysis = null;
+  if (idea.expertAnalysis) {
+    try {
+      expertAnalysis = JSON.parse(idea.expertAnalysis);
+    } catch {
+      // Битый JSON — пропускаем
+    }
+  }
+
   return NextResponse.json({
     idea: {
       ...idea,
+      expertAnalysis,
       createdAt: idea.createdAt.toISOString(),
     },
   });

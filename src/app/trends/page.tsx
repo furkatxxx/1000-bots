@@ -17,12 +17,18 @@ const SOURCE_LABELS: Record<string, string> = {
   hacker_news: "Hacker News",
   google_trends: "Google Trends",
   news_api: "NewsAPI",
+  github_trending: "GitHub Trending",
+  product_hunt: "Product Hunt",
+  yandex_wordstat: "Яндекс Вордстат",
 };
 
 const SOURCE_COLORS: Record<string, string> = {
   hacker_news: "#ff6600",
   google_trends: "#4285f4",
   news_api: "#c62828",
+  github_trending: "#24292e",
+  product_hunt: "#da552f",
+  yandex_wordstat: "#fc0",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -61,7 +67,7 @@ export default function TrendsPage() {
     fetchTrends();
   }, [fetchTrends]);
 
-  const sources = ["all", "hacker_news", "google_trends", "news_api"];
+  const sources = ["all", "hacker_news", "google_trends", "news_api", "github_trending", "product_hunt", "yandex_wordstat"];
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in">

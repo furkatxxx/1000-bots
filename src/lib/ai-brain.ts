@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { GenerationResult, GeneratedIdea } from "./types";
+import type { GenerationResult, GeneratedIdea, ExpertAnalysis } from "./types";
 
 interface BrainInput {
   trends: { title: string; score: number; source: string; category?: string }[];
@@ -327,5 +327,200 @@ export async function deepDiveIdea(input: {
     deepDive: textBlock.text,
     tokensIn: response.usage.input_tokens,
     tokensOut: response.usage.output_tokens,
+  };
+}
+
+// Экспертный совет — 4 виртуальных специалиста анализируют идею
+const EXPERT_COUNCIL_PROMPT = `Ты — экспертный совет из 4 специалистов. Каждый анализирует бизнес-идею со своей стороны и выносит оценку.
+
+## Роли:
+
+### 1. ТРЕКЕР СТАРТАПОВ (tracker)
+Опыт: 10 лет в акселераторах (ФРИИ, YC, 500 Startups). Видел 5000+ питчей.
+Задача: оценить жизнеспособность бизнес-модели.
+Проверяет: есть ли реальная проблема? решаема ли она? есть ли product-market fit? масштабируемость?
+Выносит: оценку 1-10, вердикт (go / pivot / no-go), топ-3 риска, рекомендацию.
+
+### 2. МАРКЕТОЛОГ-СТРАТЕГ (marketer)
+Опыт: 8 лет в digital-маркетинге. Специализация: привлечение первых клиентов для стартапов.
+Задача: определить, КАК и ГДЕ найти клиентов.
+Проверяет: целевая аудитория чётко определена? каналы привлечения доступны? стоимость привлечения адекватна?
+Выносит: оценку 1-10, конкретные каналы (3-5 штук), стоимость привлечения клиента (CAC), рекомендацию.
+
+### 3. ПРОДАКТ-МЕНЕДЖЕР (product)
+Опыт: 7 лет в продуктовых командах. Строил продукты от 0 до 100K пользователей.
+Задача: определить минимальный продукт и конкурентное преимущество.
+Проверяет: что должен уметь MVP? кто конкуренты? чем отличаемся? путь пользователя логичен?
+Выносит: оценку 1-10, список фич MVP (3-5 штук), конкурентов (2-4 штуки), уникальность, рекомендацию.
+
+### 4. ФИНАНСИСТ (financier)
+Опыт: 6 лет в стартап-финансах. Считал unit-экономику для 200+ проектов.
+Задача: посчитать, при каких условиях проект выйдет в прибыль.
+Проверяет: unit-экономика сходится? точка безубыточности достижима? маржинальность адекватна?
+Выносит: оценку 1-10, точку безубыточности, unit-экономику (LTV, CAC, LTV/CAC), рекомендацию.
+
+## ВАЖНЫЕ ПРАВИЛА:
+- Будь ЧЕСТНЫМ и КРИТИЧНЫМ. Не завышай оценки.
+- Оценка 7+ = хорошая идея. 5-6 = средняя. Ниже 5 = слабая.
+- Указывай КОНКРЕТНЫЕ цифры, каналы, названия конкурентов.
+- Все суммы в рублях для РФ-идей, в долларах для глобальных.
+- Пиши на русском языке.
+
+## Формат ответа — СТРОГО JSON (без markdown, без комментариев):
+{
+  "tracker": {
+    "score": число 1-10,
+    "verdict": "go" | "pivot" | "no-go",
+    "risks": ["риск 1", "риск 2", "риск 3"],
+    "recommendation": "текст"
+  },
+  "marketer": {
+    "score": число 1-10,
+    "channels": ["канал 1", "канал 2", ...],
+    "cac": "стоимость привлечения клиента",
+    "recommendation": "текст"
+  },
+  "product": {
+    "score": число 1-10,
+    "mvpFeatures": ["фича 1", "фича 2", ...],
+    "competitors": ["конкурент 1", "конкурент 2", ...],
+    "uniqueness": "чем отличаемся",
+    "recommendation": "текст"
+  },
+  "financier": {
+    "score": число 1-10,
+    "breakeven": "точка безубыточности",
+    "unitEconomics": "LTV: X₽, CAC: Y₽, LTV/CAC: Z",
+    "recommendation": "текст"
+  },
+  "finalVerdict": "launch" | "pivot" | "reject",
+  "finalScore": число 1-10 (среднее),
+  "summary": "итоговый вывод в 2-3 предложениях"
+}`;
+
+export async function expertCouncil(input: {
+  idea: {
+    name: string;
+    description: string;
+    targetAudience: string;
+    monetization: string;
+    startupCost: string;
+    competitionLevel: string;
+    actionPlan: string;
+    estimatedRevenue?: string | null;
+  };
+  apiKey: string;
+  model: string;
+}): Promise<{ analysis: ExpertAnalysis; tokensIn: number; tokensOut: number }> {
+  const client = new Anthropic({ apiKey: input.apiKey });
+
+  const userPrompt = `Проанализируй эту бизнес-идею как экспертный совет из 4 специалистов:
+
+**Идея:** ${input.idea.name}
+**Описание:** ${input.idea.description}
+**Целевая аудитория:** ${input.idea.targetAudience}
+**Монетизация:** ${input.idea.monetization}
+**Стоимость запуска:** ${input.idea.startupCost}
+**Уровень конкуренции:** ${input.idea.competitionLevel}
+**План действий:** ${input.idea.actionPlan}
+${input.idea.estimatedRevenue ? `**Ожидаемый доход:** ${input.idea.estimatedRevenue}` : ""}
+
+Верни ТОЛЬКО валидный JSON. Без markdown, без комментариев.`;
+
+  const maxRetries = 2;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await client.messages.create({
+        model: input.model,
+        max_tokens: 4096,
+        system: EXPERT_COUNCIL_PROMPT,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+
+      const textBlock = response.content.find((b) => b.type === "text");
+      if (!textBlock || textBlock.type !== "text") {
+        throw new Error("AI не вернул текстовый ответ");
+      }
+
+      const analysis = parseExpertAnalysis(textBlock.text);
+
+      return {
+        analysis,
+        tokensIn: response.usage.input_tokens,
+        tokensOut: response.usage.output_tokens,
+      };
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries;
+      const isParseError = error instanceof SyntaxError || (error instanceof Error && error.message.includes("JSON"));
+
+      if (isParseError && !isLastAttempt) {
+        console.warn(`[Expert Council] Попытка ${attempt + 1} не удалась, пробую ещё...`);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("Исчерпаны попытки экспертного совета");
+}
+
+function parseExpertAnalysis(text: string): ExpertAnalysis {
+  const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new SyntaxError("Экспертный совет не вернул JSON");
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  // Валидация обязательных полей
+  if (!parsed.tracker || !parsed.marketer || !parsed.product || !parsed.financier) {
+    throw new Error("Экспертный совет вернул неполные данные");
+  }
+
+  const clampScore = (s: unknown) => Math.min(10, Math.max(1, Math.round(Number(s) || 5)));
+
+  const tracker = {
+    score: clampScore(parsed.tracker.score),
+    verdict: (["go", "pivot", "no-go"].includes(parsed.tracker.verdict) ? parsed.tracker.verdict : "pivot") as "go" | "pivot" | "no-go",
+    risks: Array.isArray(parsed.tracker.risks) ? parsed.tracker.risks.map(String) : [],
+    recommendation: String(parsed.tracker.recommendation || ""),
+  };
+
+  const marketer = {
+    score: clampScore(parsed.marketer.score),
+    channels: Array.isArray(parsed.marketer.channels) ? parsed.marketer.channels.map(String) : [],
+    cac: String(parsed.marketer.cac || "Не оценено"),
+    recommendation: String(parsed.marketer.recommendation || ""),
+  };
+
+  const product = {
+    score: clampScore(parsed.product.score),
+    mvpFeatures: Array.isArray(parsed.product.mvpFeatures) ? parsed.product.mvpFeatures.map(String) : [],
+    competitors: Array.isArray(parsed.product.competitors) ? parsed.product.competitors.map(String) : [],
+    uniqueness: String(parsed.product.uniqueness || ""),
+    recommendation: String(parsed.product.recommendation || ""),
+  };
+
+  const financier = {
+    score: clampScore(parsed.financier.score),
+    breakeven: String(parsed.financier.breakeven || "Не оценено"),
+    unitEconomics: String(parsed.financier.unitEconomics || "Не оценено"),
+    recommendation: String(parsed.financier.recommendation || ""),
+  };
+
+  const avgScore = Math.round(((tracker.score + marketer.score + product.score + financier.score) / 4) * 10) / 10;
+
+  const finalVerdict = (["launch", "pivot", "reject"].includes(parsed.finalVerdict)
+    ? parsed.finalVerdict
+    : avgScore >= 7 ? "launch" : avgScore >= 5 ? "pivot" : "reject") as "launch" | "pivot" | "reject";
+
+  return {
+    tracker,
+    marketer,
+    product,
+    financier,
+    finalVerdict,
+    finalScore: parsed.finalScore ? Math.round(Number(parsed.finalScore) * 10) / 10 : avgScore,
+    summary: String(parsed.summary || "Анализ завершён."),
   };
 }

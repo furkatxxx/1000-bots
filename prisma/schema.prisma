@@ -70,6 +70,7 @@ model BusinessIdea {
   estimatedRevenue String?     // Ожидаемый доход за 3 месяца
   timeToLaunch     String?     // Время до запуска (например "14 дней")
   deepDive         String?     // Развёрнутый план реализации (markdown)
+  expertAnalysis   String?     // JSON: анализ от экспертного совета (4 специалиста)
   rating           Int?        // Оценка пользователя 1-5
   isFavorite       Boolean     @default(false)
   isArchived       Boolean     @default(false)
@@ -87,4 +88,6 @@ model Settings {
   googleTrendsGeo   String @default("US")
   maxIdeasPerReport Int    @default(10)
   preferredModel    String @default("claude-haiku-4-5-20251001")
+  telegramBotToken  String? // Токен Telegram-бота
+  telegramChatId    String? // Chat ID для уведомлений
 }

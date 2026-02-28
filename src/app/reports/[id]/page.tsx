@@ -1,10 +1,14 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useMemo } from "react";
 import Link from "next/link";
 import { useReport } from "@/hooks/useReport";
 import { IdeaCard } from "@/components/ui/IdeaCard";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
+import type { IdeaDTO } from "@/lib/types";
+
+type SortBy = "chance" | "revenue" | "difficulty" | "default";
+type ViewMode = "cards" | "list";
 
 export default function ReportDetailPage({
   params,
@@ -13,6 +17,8 @@ export default function ReportDetailPage({
 }) {
   const { id } = use(params);
   const { report, loading, error, refetch } = useReport(id);
+  const [sortBy, setSortBy] = useState<SortBy>("default");
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
   async function handleToggleFavorite(ideaId: string, isFavorite: boolean) {
     await fetch(`/api/ideas/${ideaId}`, {
@@ -23,15 +29,24 @@ export default function ReportDetailPage({
     refetch();
   }
 
+  const sortedIdeas = useMemo(() => {
+    if (!report) return [];
+    const ideas = [...report.ideas];
+    if (sortBy === "chance") ideas.sort((a, b) => (b.successChance || 0) - (a.successChance || 0));
+    if (sortBy === "revenue") ideas.sort((a, b) => parseRevenue(b.estimatedRevenue) - parseRevenue(a.estimatedRevenue));
+    if (sortBy === "difficulty") {
+      const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
+      ideas.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
+    }
+    return ideas;
+  }, [report, sortBy]);
+
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl animate-fade-in">
         <div className="mb-6 h-8 w-48 animate-skeleton-pulse rounded" style={{ backgroundColor: "var(--muted)" }} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
       </div>
     );
@@ -42,27 +57,25 @@ export default function ReportDetailPage({
       <div className="mx-auto max-w-4xl animate-fade-in">
         <h1 className="mb-6 text-3xl font-bold tracking-tight">Ошибка</h1>
         <p style={{ color: "var(--destructive)" }}>{error || "Отчёт не найден"}</p>
-        <Link href="/reports" className="mt-4 inline-block text-sm font-medium" style={{ color: "var(--primary)" }}>
-          ← К списку отчётов
-        </Link>
+        <Link href="/reports" className="mt-4 inline-block text-sm font-medium" style={{ color: "var(--primary)" }}>← К списку отчётов</Link>
       </div>
     );
   }
 
   const date = new Date(report.date);
-  const formattedDate = date.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const formattedDate = date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+
+  const sortOptions: { value: SortBy; label: string }[] = [
+    { value: "default", label: "По умолчанию" },
+    { value: "chance", label: "По шансу ↓" },
+    { value: "revenue", label: "По доходу ↓" },
+    { value: "difficulty", label: "По сложности" },
+  ];
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in">
-      {/* Шапка */}
       <div className="mb-2">
-        <Link href="/reports" className="text-sm font-medium" style={{ color: "var(--primary)" }}>
-          ← Отчёты
-        </Link>
+        <Link href="/reports" className="text-sm font-medium" style={{ color: "var(--primary)" }}>← Отчёты</Link>
       </div>
 
       <div className="mb-6 flex items-start justify-between">
@@ -76,25 +89,76 @@ export default function ReportDetailPage({
       </div>
 
       {/* Метрики */}
-      <div className="mb-8 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-3 gap-4">
         <MetricBox label="Трендов" value={report.trendsCount} />
         <MetricBox label="Идей" value={report.ideas.length} />
         <MetricBox label="Токенов" value={(report.aiTokensIn || 0) + (report.aiTokensOut || 0)} />
       </div>
+
+      {/* Панель фильтров + вид */}
+      {report.ideas.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          {/* Сортировка */}
+          <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
+            {sortOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSortBy(opt.value)}
+                className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: sortBy === opt.value ? "var(--card)" : "transparent",
+                  color: sortBy === opt.value ? "var(--foreground)" : "var(--muted-foreground)",
+                  boxShadow: sortBy === opt.value ? "var(--shadow-sm)" : "none",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Переключатель вида */}
+          <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
+            <button
+              onClick={() => setViewMode("cards")}
+              className="cursor-pointer rounded-lg px-3 py-1.5 text-xs transition-all"
+              style={{
+                backgroundColor: viewMode === "cards" ? "var(--card)" : "transparent",
+                boxShadow: viewMode === "cards" ? "var(--shadow-sm)" : "none",
+              }}
+              title="Карточки"
+            >
+              ▦
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className="cursor-pointer rounded-lg px-3 py-1.5 text-xs transition-all"
+              style={{
+                backgroundColor: viewMode === "list" ? "var(--card)" : "transparent",
+                boxShadow: viewMode === "list" ? "var(--shadow-sm)" : "none",
+              }}
+              title="Список"
+            >
+              ≡
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Список идей */}
       {report.ideas.length === 0 ? (
         <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}>
           <p style={{ color: "var(--muted-foreground)" }}>В этом отчёте нет идей</p>
         </div>
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          {report.ideas.map((idea) => (
-            <IdeaCard
-              key={idea.id}
-              idea={idea}
-              onToggleFavorite={handleToggleFavorite}
-            />
+          {sortedIdeas.map((idea) => (
+            <IdeaCard key={idea.id} idea={idea} onToggleFavorite={handleToggleFavorite} />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sortedIdeas.map((idea) => (
+            <IdeaListItem key={idea.id} idea={idea} onToggleFavorite={handleToggleFavorite} />
           ))}
         </div>
       )}
@@ -102,35 +166,76 @@ export default function ReportDetailPage({
   );
 }
 
-function StatusPill({ status }: { status: string }) {
-  const config: Record<string, { label: string; color: string; bg: string }> = {
-    complete: { label: "Готов", color: "var(--success)", bg: "var(--success)" },
-    generating: { label: "Генерация...", color: "var(--warning)", bg: "var(--warning)" },
-    failed: { label: "Ошибка", color: "var(--destructive)", bg: "var(--destructive)" },
-    pending: { label: "Ожидание", color: "var(--muted-foreground)", bg: "var(--muted)" },
-  };
-  const c = config[status] || config.pending;
+// Строчный вид идеи
+function IdeaListItem({ idea, onToggleFavorite }: { idea: IdeaDTO; onToggleFavorite?: (id: string, fav: boolean) => void }) {
+  const chanceColor = (idea.successChance || 0) >= 70 ? "var(--success)" : (idea.successChance || 0) >= 40 ? "var(--warning)" : "var(--destructive)";
+  const diffLabels: Record<string, string> = { easy: "Легко", medium: "Средне", hard: "Сложно" };
 
   return (
-    <span
-      className="rounded-full px-3 py-1 text-xs font-semibold text-white"
-      style={{ backgroundColor: c.bg }}
+    <div
+      className="flex items-center gap-4 rounded-xl p-4 transition-all hover:scale-[1.005]"
+      style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
     >
-      {c.label}
-    </span>
+      <span className="text-2xl">{idea.emoji}</span>
+
+      <div className="min-w-0 flex-1">
+        <Link href={`/ideas/${idea.id}`} className="text-sm font-semibold hover:opacity-70">
+          {idea.name}
+        </Link>
+        <div className="mt-0.5 flex items-center gap-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          <span>{diffLabels[idea.difficulty] || idea.difficulty}</span>
+          {idea.timeToLaunch && <span>· {idea.timeToLaunch}</span>}
+        </div>
+      </div>
+
+      {idea.successChance != null && (
+        <div className="text-right">
+          <div className="text-sm font-bold" style={{ color: chanceColor }}>{idea.successChance}%</div>
+          <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>шанс</div>
+        </div>
+      )}
+
+      {idea.estimatedRevenue && (
+        <div className="hidden text-right sm:block">
+          <div className="text-xs font-medium" style={{ color: "var(--success)" }}>{idea.estimatedRevenue}</div>
+        </div>
+      )}
+
+      <button
+        onClick={() => onToggleFavorite?.(idea.id, !idea.isFavorite)}
+        className="cursor-pointer text-lg opacity-50 hover:opacity-100"
+      >
+        {idea.isFavorite ? "⭐" : "☆"}
+      </button>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const config: Record<string, { label: string; bg: string }> = {
+    complete: { label: "Готов", bg: "var(--success)" },
+    generating: { label: "Генерация...", bg: "var(--warning)" },
+    failed: { label: "Ошибка", bg: "var(--destructive)" },
+    pending: { label: "Ожидание", bg: "var(--muted)" },
+  };
+  const c = config[status] || config.pending;
+  return (
+    <span className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ backgroundColor: c.bg }}>{c.label}</span>
   );
 }
 
 function MetricBox({ label, value }: { label: string; value: number }) {
   return (
-    <div
-      className="rounded-xl p-4 text-center"
-      style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
-    >
+    <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}>
       <div className="text-2xl font-bold">{value.toLocaleString("ru-RU")}</div>
-      <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
-        {label}
-      </div>
+      <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>{label}</div>
     </div>
   );
+}
+
+// Парсим доход из строки для сортировки (берём первое число)
+function parseRevenue(s: string | null | undefined): number {
+  if (!s) return 0;
+  const match = s.replace(/\s/g, "").match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
 }

@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import type { IdeaDTO } from "@/lib/types";
+import type { IdeaDTO, ExpertAnalysis } from "@/lib/types";
 
 export default function IdeaDetailPage({
   params,
@@ -14,6 +14,8 @@ export default function IdeaDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
+  const [expertLoading, setExpertLoading] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/ideas/${id}`)
@@ -67,6 +69,25 @@ export default function IdeaDetailPage({
       setError("Ошибка генерации Deep Dive");
     } finally {
       setDeepDiveLoading(false);
+    }
+  }
+
+  async function handleExpertCouncil() {
+    if (!idea || expertLoading) return;
+    setExpertLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ideas/${id}/expert-council`, { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setIdea((prev) => prev ? { ...prev, expertAnalysis: data.analysis } : prev);
+      }
+    } catch {
+      setError("Ошибка экспертного совета");
+    } finally {
+      setExpertLoading(false);
     }
   }
 
@@ -232,15 +253,66 @@ export default function IdeaDetailPage({
         </div>
       )}
 
-      {/* Карточки с деталями */}
-      <div className="space-y-4">
-        <InfoBlock title="Описание" content={idea.description} />
-        <InfoBlock title="Целевая аудитория" content={idea.targetAudience} />
-        <InfoBlock title="Монетизация" content={idea.monetization} />
-        <InfoBlock title="Стоимость запуска" content={idea.startupCost} />
-        <InfoBlock title="Конкуренция" content={idea.competitionLevel} />
-        <InfoBlock title="Подтверждение трендами" content={idea.trendBacking} />
-        <InfoBlock title="План действий" content={idea.actionPlan} />
+      {/* Описание — всегда видно */}
+      <InfoBlock title="Описание" content={idea.description} />
+
+      {/* Подробные данные — сворачиваемый блок */}
+      <div className="mt-4">
+        <button
+          onClick={() => setDetailsOpen(!detailsOpen)}
+          className="flex w-full cursor-pointer items-center justify-between rounded-2xl p-4 transition-all hover:scale-[1.005]"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📋</span>
+            <span className="text-sm font-semibold">Подробные данные</span>
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              аудитория, монетизация, конкуренция, план
+            </span>
+          </div>
+          <span className="text-sm transition-transform" style={{ transform: detailsOpen ? "rotate(180deg)" : "rotate(0)" }}>
+            ▼
+          </span>
+        </button>
+
+        {detailsOpen && (
+          <div className="mt-2 space-y-3 animate-fade-in">
+            <InfoBlock title="Целевая аудитория" content={idea.targetAudience} />
+            <InfoBlock title="Монетизация" content={idea.monetization} />
+            <InfoBlock title="Стоимость запуска" content={idea.startupCost} />
+            <InfoBlock title="Конкуренция" content={idea.competitionLevel} />
+            <InfoBlock title="Подтверждение трендами" content={idea.trendBacking} />
+            <InfoBlock title="План действий" content={idea.actionPlan} />
+          </div>
+        )}
+      </div>
+
+      {/* Экспертный совет */}
+      <div className="mt-6">
+        {idea.expertAnalysis ? (
+          <ExpertCouncilPanel analysis={idea.expertAnalysis} />
+        ) : (
+          <button
+            onClick={handleExpertCouncil}
+            disabled={expertLoading}
+            className="w-full cursor-pointer rounded-2xl p-5 text-center transition-all duration-200 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              backgroundColor: "var(--card)",
+              boxShadow: "var(--shadow-sm)",
+              border: "2px dashed var(--warning, #f59e0b)",
+            }}
+          >
+            <span className="text-2xl">{expertLoading ? "⏳" : "🧠"}</span>
+            <div className="mt-2 text-sm font-semibold" style={{ color: "var(--warning, #f59e0b)" }}>
+              {expertLoading ? "Экспертный совет анализирует..." : "Экспертный совет — 4 специалиста оценят идею"}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              {expertLoading
+                ? "Трекер, маркетолог, продакт и финансист анализируют идею..."
+                : "Трекер, маркетолог, продакт-менеджер и финансист дадут оценку, риски и рекомендации"}
+            </div>
+          </button>
+        )}
       </div>
 
       {/* Deep Dive — развёрнутый план */}
@@ -280,6 +352,193 @@ export default function IdeaDetailPage({
             </div>
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Панель экспертного совета
+function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
+  const verdictLabels: Record<string, string> = {
+    launch: "Запускать", pivot: "Доработать", reject: "Отказаться",
+  };
+  const verdictColors: Record<string, string> = {
+    launch: "var(--success)", pivot: "var(--warning)", reject: "var(--destructive)",
+  };
+
+  const scoreColor = (score: number) =>
+    score >= 7 ? "var(--success)" : score >= 5 ? "var(--warning)" : "var(--destructive)";
+
+  const experts = [
+    {
+      emoji: "🎯",
+      title: "Трекер стартапов",
+      score: analysis.tracker.score,
+      verdict: analysis.tracker.verdict === "go" ? "GO" : analysis.tracker.verdict === "pivot" ? "PIVOT" : "NO-GO",
+      verdictColor: analysis.tracker.verdict === "go" ? "var(--success)" : analysis.tracker.verdict === "pivot" ? "var(--warning)" : "var(--destructive)",
+      content: (
+        <>
+          <div className="mb-2">
+            <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Риски:</span>
+            <ul className="mt-1 space-y-0.5">
+              {analysis.tracker.risks.map((risk, i) => (
+                <li key={i} className="text-xs">• {risk}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>{analysis.tracker.recommendation}</p>
+        </>
+      ),
+    },
+    {
+      emoji: "📢",
+      title: "Маркетолог",
+      score: analysis.marketer.score,
+      content: (
+        <>
+          <div className="mb-2">
+            <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Каналы:</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {analysis.marketer.channels.map((ch, i) => (
+                <span key={i} className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "var(--muted)", color: "var(--foreground)" }}>
+                  {ch}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="mb-2 text-xs">
+            <span style={{ color: "var(--muted-foreground)" }}>CAC: </span>
+            <span className="font-medium">{analysis.marketer.cac}</span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>{analysis.marketer.recommendation}</p>
+        </>
+      ),
+    },
+    {
+      emoji: "🛠",
+      title: "Продакт-менеджер",
+      score: analysis.product.score,
+      content: (
+        <>
+          <div className="mb-2">
+            <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>MVP:</span>
+            <ul className="mt-1 space-y-0.5">
+              {analysis.product.mvpFeatures.map((f, i) => (
+                <li key={i} className="text-xs">• {f}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="mb-2">
+            <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Конкуренты:</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {analysis.product.competitors.map((c, i) => (
+                <span key={i} className="rounded-full px-2 py-0.5 text-xs" style={{ backgroundColor: "var(--muted)", color: "var(--foreground)" }}>
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="mb-2 text-xs">
+            <span style={{ color: "var(--muted-foreground)" }}>Уникальность: </span>
+            <span>{analysis.product.uniqueness}</span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>{analysis.product.recommendation}</p>
+        </>
+      ),
+    },
+    {
+      emoji: "💰",
+      title: "Финансист",
+      score: analysis.financier.score,
+      content: (
+        <>
+          <div className="mb-2 text-xs">
+            <span style={{ color: "var(--muted-foreground)" }}>Безубыточность: </span>
+            <span className="font-medium">{analysis.financier.breakeven}</span>
+          </div>
+          <div className="mb-2 text-xs">
+            <span style={{ color: "var(--muted-foreground)" }}>Unit-экономика: </span>
+            <span className="font-medium">{analysis.financier.unitEconomics}</span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>{analysis.financier.recommendation}</p>
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <div
+      className="rounded-2xl p-6"
+      style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+    >
+      {/* Заголовок + итоговый вердикт */}
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🧠</span>
+          <h3 className="text-lg font-bold">Экспертный совет</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-2xl font-bold" style={{ color: scoreColor(analysis.finalScore) }}>
+              {analysis.finalScore}/10
+            </div>
+          </div>
+          <span
+            className="rounded-full px-3 py-1 text-xs font-bold uppercase"
+            style={{
+              backgroundColor: `${verdictColors[analysis.finalVerdict] || "var(--muted)"}20`,
+              color: verdictColors[analysis.finalVerdict] || "var(--muted-foreground)",
+            }}
+          >
+            {verdictLabels[analysis.finalVerdict] || analysis.finalVerdict}
+          </span>
+        </div>
+      </div>
+
+      {/* Итог */}
+      <div
+        className="mb-5 rounded-xl p-3 text-sm leading-relaxed"
+        style={{ backgroundColor: "var(--muted)" }}
+      >
+        {analysis.summary}
+      </div>
+
+      {/* 4 карточки экспертов */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {experts.map((expert) => (
+          <div
+            key={expert.title}
+            className="rounded-xl p-4"
+            style={{ backgroundColor: "var(--background)", border: "1px solid var(--muted)" }}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span>{expert.emoji}</span>
+                <span className="text-sm font-semibold">{expert.title}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {"verdict" in expert && "verdictColor" in expert && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-bold"
+                    style={{ color: expert.verdictColor as string }}
+                  >
+                    {expert.verdict as string}
+                  </span>
+                )}
+                <span
+                  className="rounded-full px-2 py-0.5 text-xs font-bold"
+                  style={{
+                    backgroundColor: `${scoreColor(expert.score)}20`,
+                    color: scoreColor(expert.score),
+                  }}
+                >
+                  {expert.score}/10
+                </span>
+              </div>
+            </div>
+            {expert.content}
+          </div>
+        ))}
       </div>
     </div>
   );

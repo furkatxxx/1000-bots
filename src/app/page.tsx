@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useReports } from "@/hooks/useReports";
 import { useGenerate } from "@/hooks/useGenerate";
 import { useToast } from "@/components/ui/Toast";
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const { reports, favoritesCount, loading: loadingReports, refetch: refetchReports } = useReports();
   const { generate, generating } = useGenerate();
   const { showToast } = useToast();
+  const [sendingTg, setSendingTg] = useState(false);
 
   // Сегодняшний отчёт — первый в списке (отсортированы по дате desc)
   const todayReport = reports.length > 0 ? reports[0] : null;
@@ -30,6 +32,23 @@ export default function DashboardPage() {
     } else {
       showToast(result?.error || "Ошибка генерации", "error");
       refetchReports();
+    }
+  }
+
+  async function handleSendTelegram() {
+    setSendingTg(true);
+    try {
+      const res = await fetch("/api/telegram/send-top", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`ТОП-${data.sentCount} отправлено в Telegram!`, "success");
+      } else {
+        showToast(data.error || "Ошибка отправки", "error");
+      }
+    } catch {
+      showToast("Ошибка отправки в Telegram", "error");
+    } finally {
+      setSendingTg(false);
     }
   }
 
@@ -51,13 +70,27 @@ export default function DashboardPage() {
         <QuickStat icon="⭐" label="Избранных" value={favoritesCount} />
       </div>
 
-      {/* Сегодняшний отчёт */}
+      {/* Сегодняшний отчёт + кнопка Telegram */}
       <div className="mb-8">
         <TodayReport
           report={todayReport}
           onGenerate={handleGenerate}
           generating={generating}
         />
+        {todayReport && todayReport.status === "complete" && (
+          <button
+            onClick={handleSendTelegram}
+            disabled={sendingTg}
+            className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-sm font-medium transition-all hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: "#0088cc", color: "#0088cc" }}
+          >
+            {sendingTg ? (
+              <>⏳ Отправляю...</>
+            ) : (
+              <>✈️ Отправить ТОП-5 в Telegram</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Топ идеи из последнего отчёта */}
@@ -76,7 +109,7 @@ export default function DashboardPage() {
   );
 }
 
-// Подкомпонент для топ-идей из отчёта
+// Подкомпонент для топ-идей из отчёта (только лучшие по шансу + быстрый запуск)
 function TopIdeas({ reportId }: { reportId: string }) {
   const { report, loading } = useReport(reportId);
 
@@ -91,12 +124,25 @@ function TopIdeas({ reportId }: { reportId: string }) {
 
   if (!report || report.ideas.length === 0) return null;
 
-  // Показываем первые 4 идеи
-  const topIdeas = report.ideas.slice(0, 4);
+  // Умная сортировка: шанс успеха * коэффициент сложности
+  const diffWeight: Record<string, number> = { easy: 1.3, medium: 1.0, hard: 0.7 };
+  const topIdeas = [...report.ideas]
+    .filter((idea) => !idea.isArchived)
+    .map((idea) => ({
+      ...idea,
+      _rank: (idea.successChance || 0) * (diffWeight[idea.difficulty] || 1),
+    }))
+    .sort((a, b) => b._rank - a._rank)
+    .slice(0, 4);
+
+  if (topIdeas.length === 0) return null;
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-semibold">Топ идеи</h2>
+      <h2 className="mb-4 text-xl font-semibold">🏆 Лучшие идеи</h2>
+      <p className="mb-4 text-xs" style={{ color: "var(--muted-foreground)" }}>
+        Отсортированы по шансу успеха и скорости запуска
+      </p>
       <div className="grid gap-4 sm:grid-cols-2">
         {topIdeas.map((idea) => (
           <IdeaCard key={idea.id} idea={idea} />

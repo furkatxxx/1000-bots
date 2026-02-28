@@ -14,6 +14,8 @@ export default function SettingsPage() {
   const [geo, setGeo] = useState("US");
   const [maxIdeas, setMaxIdeas] = useState(10);
   const [model, setModel] = useState("claude-haiku-4-5-20251001");
+  const [tgBotToken, setTgBotToken] = useState("");
+  const [tgChatId, setTgChatId] = useState("");
   const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
@@ -32,6 +34,8 @@ export default function SettingsPage() {
       setGeo(settings.googleTrendsGeo || "US");
       setMaxIdeas(settings.maxIdeasPerReport || 10);
       setModel(settings.preferredModel || "claude-haiku-4-5-20251001");
+      setTgBotToken(settings.telegramBotToken || "");
+      setTgChatId(settings.telegramChatId || "");
     }
   }, [settings]);
 
@@ -74,6 +78,12 @@ export default function SettingsPage() {
     }
     if (wordstatToken && !wordstatToken.includes("••••")) {
       updates.wordstatToken = wordstatToken;
+    }
+    if (tgBotToken && !tgBotToken.includes("••••")) {
+      updates.telegramBotToken = tgBotToken;
+    }
+    if (tgChatId) {
+      updates.telegramChatId = tgChatId;
     }
 
     const ok = await save(updates);
@@ -217,6 +227,50 @@ export default function SettingsPage() {
             className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
             style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
           />
+        </div>
+
+        {/* Telegram */}
+        <h2 className="mb-4 text-lg font-semibold">Telegram-уведомления</h2>
+
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            Токен бота
+          </label>
+          <input
+            type="password"
+            value={tgBotToken}
+            onChange={(e) => setTgBotToken(e.target.value)}
+            placeholder="123456:ABC-DEF..."
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Создай бота через{" "}
+            <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--primary)" }}>
+              @BotFather
+            </a>
+            {" "}и вставь токен
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            Chat ID
+          </label>
+          <input
+            type="text"
+            value={tgChatId}
+            onChange={(e) => setTgChatId(e.target.value)}
+            placeholder="123456789"
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Узнай свой Chat ID через{" "}
+            <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--primary)" }}>
+              @userinfobot
+            </a>
+          </p>
         </div>
 
         {/* Источники трендов */}

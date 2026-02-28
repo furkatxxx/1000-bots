@@ -42,6 +42,12 @@ export async function POST(request: Request) {
   if (typeof body.wordstatToken === "string") {
     data.wordstatToken = body.wordstatToken;
   }
+  if (typeof body.telegramBotToken === "string") {
+    data.telegramBotToken = body.telegramBotToken;
+  }
+  if (typeof body.telegramChatId === "string") {
+    data.telegramChatId = body.telegramChatId;
+  }
 
   const settings = await prisma.settings.upsert({
     where: { id: "main" },
@@ -59,6 +65,8 @@ function maskKeys(settings: Record<string, unknown>) {
     anthropicApiKey: maskString(settings.anthropicApiKey as string | null),
     newsApiKey: maskString(settings.newsApiKey as string | null),
     wordstatToken: maskString(settings.wordstatToken as string | null),
+    telegramBotToken: maskString(settings.telegramBotToken as string | null),
+    telegramChatId: settings.telegramChatId || "",
   };
 }
 

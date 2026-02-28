@@ -54,6 +54,48 @@ export interface ReportDTO {
   createdAt: string;
 }
 
+// Оценка одного эксперта
+export interface ExpertVerdict {
+  score: number; // 1-10
+  recommendation: string;
+}
+
+// Трекер стартапов
+export interface TrackerVerdict extends ExpertVerdict {
+  verdict: "go" | "pivot" | "no-go";
+  risks: string[];
+}
+
+// Маркетолог
+export interface MarketerVerdict extends ExpertVerdict {
+  channels: string[];
+  cac: string; // стоимость привлечения клиента
+}
+
+// Продакт-менеджер
+export interface ProductVerdict extends ExpertVerdict {
+  mvpFeatures: string[];
+  competitors: string[];
+  uniqueness: string;
+}
+
+// Финансист
+export interface FinancierVerdict extends ExpertVerdict {
+  breakeven: string;
+  unitEconomics: string;
+}
+
+// Совокупный результат экспертного совета
+export interface ExpertAnalysis {
+  tracker: TrackerVerdict;
+  marketer: MarketerVerdict;
+  product: ProductVerdict;
+  financier: FinancierVerdict;
+  finalVerdict: "launch" | "pivot" | "reject";
+  finalScore: number; // средняя оценка 1-10
+  summary: string;
+}
+
 // DTO для идеи в API
 export interface IdeaDTO {
   id: string;
@@ -73,6 +115,7 @@ export interface IdeaDTO {
   estimatedRevenue: string | null;
   timeToLaunch: string | null;
   deepDive: string | null;
+  expertAnalysis: ExpertAnalysis | null;
   rating: number | null;
   isFavorite: boolean;
   isArchived: boolean;
