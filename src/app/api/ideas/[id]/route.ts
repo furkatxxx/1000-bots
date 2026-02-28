@@ -6,64 +6,67 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-
-  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Невалидный JSON" }, { status: 400 });
-  }
+    const { id } = await params;
 
-  // Проверяем что идея существует
-  const existing = await prisma.businessIdea.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json(
-      { error: "Идея не найдена" },
-      { status: 404 }
-    );
-  }
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Невалидный JSON" }, { status: 400 });
+    }
 
-  // Собираем только разрешённые поля
-  const data: Record<string, unknown> = {};
+    const existing = await prisma.businessIdea.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Идея не найдена" },
+        { status: 404 }
+      );
+    }
 
-  if (typeof body.rating === "number" && body.rating >= 1 && body.rating <= 5) {
-    data.rating = body.rating;
-  }
-  if (body.rating === null) {
-    data.rating = null;
-  }
-  if (typeof body.isFavorite === "boolean") {
-    data.isFavorite = body.isFavorite;
-  }
-  if (typeof body.isArchived === "boolean") {
-    data.isArchived = body.isArchived;
-  }
+    const data: Record<string, unknown> = {};
 
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json(
-      { error: "Нет данных для обновления" },
-      { status: 400 }
-    );
+    if (typeof body.rating === "number" && body.rating >= 1 && body.rating <= 5) {
+      data.rating = body.rating;
+    }
+    if (body.rating === null) {
+      data.rating = null;
+    }
+    if (typeof body.isFavorite === "boolean") {
+      data.isFavorite = body.isFavorite;
+    }
+    if (typeof body.isArchived === "boolean") {
+      data.isArchived = body.isArchived;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json(
+        { error: "Нет данных для обновления" },
+        { status: 400 }
+      );
+    }
+
+    const updated = await prisma.businessIdea.update({
+      where: { id },
+      data,
+    });
+
+    let expertAnalysis = null;
+    if (updated.expertAnalysis) {
+      try { expertAnalysis = JSON.parse(updated.expertAnalysis); } catch { /* skip */ }
+    }
+
+    return NextResponse.json({
+      idea: {
+        ...updated,
+        expertAnalysis,
+        createdAt: updated.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("[API /ideas/id] Ошибка PATCH:", error);
+    return NextResponse.json({ error: "Ошибка обновления идеи" }, { status: 500 });
   }
-
-  const updated = await prisma.businessIdea.update({
-    where: { id },
-    data,
-  });
-
-  let expertAnalysis = null;
-  if (updated.expertAnalysis) {
-    try { expertAnalysis = JSON.parse(updated.expertAnalysis); } catch { /* skip */ }
-  }
-
-  return NextResponse.json({
-    idea: {
-      ...updated,
-      expertAnalysis,
-      createdAt: updated.createdAt.toISOString(),
-    },
-  });
 }
 
 // GET /api/ideas/[id] — получить одну идею
@@ -71,32 +74,36 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  try {
+    const { id } = await params;
 
-  const idea = await prisma.businessIdea.findUnique({ where: { id } });
+    const idea = await prisma.businessIdea.findUnique({ where: { id } });
 
-  if (!idea) {
-    return NextResponse.json(
-      { error: "Идея не найдена" },
-      { status: 404 }
-    );
-  }
-
-  // Парсим expertAnalysis из JSON-строки в объект
-  let expertAnalysis = null;
-  if (idea.expertAnalysis) {
-    try {
-      expertAnalysis = JSON.parse(idea.expertAnalysis);
-    } catch {
-      // Битый JSON — пропускаем
+    if (!idea) {
+      return NextResponse.json(
+        { error: "Идея не найдена" },
+        { status: 404 }
+      );
     }
-  }
 
-  return NextResponse.json({
-    idea: {
-      ...idea,
-      expertAnalysis,
-      createdAt: idea.createdAt.toISOString(),
-    },
-  });
+    let expertAnalysis = null;
+    if (idea.expertAnalysis) {
+      try {
+        expertAnalysis = JSON.parse(idea.expertAnalysis);
+      } catch {
+        // Битый JSON — пропускаем
+      }
+    }
+
+    return NextResponse.json({
+      idea: {
+        ...idea,
+        expertAnalysis,
+        createdAt: idea.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("[API /ideas/id] Ошибка GET:", error);
+    return NextResponse.json({ error: "Ошибка загрузки идеи" }, { status: 500 });
+  }
 }

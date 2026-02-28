@@ -2,6 +2,7 @@
 // Бесплатно, нужен сервисный токен VK (регистрация приложения)
 
 import type { TrendItem, TrendCollector } from "./base";
+import { fetchWithTimeout } from "@/lib/utils";
 
 const VK_API = "https://api.vk.com/method";
 const VK_VERSION = "5.199";
@@ -45,43 +46,42 @@ export class VkTrendsCollector implements TrendCollector {
     const shuffled = [...SEED_HASHTAGS].sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, 4);
 
-    for (const hashtag of selected) {
-      try {
-        const posts = await this.searchPosts(hashtag);
+    // Запрашиваем параллельно (вместо последовательно — ускорение x4)
+    const results = await Promise.allSettled(
+      selected.map((hashtag) => this.searchPosts(hashtag).then((posts) => ({ hashtag, posts })))
+    );
 
-        for (const post of posts) {
-          const engagement = (post.likes?.count || 0) + (post.reposts?.count || 0) * 3 + (post.comments?.count || 0) * 2;
-          const views = post.views?.count || 0;
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const { hashtag, posts } = result.value;
 
-          // Нормализуем очки: вовлечённость → 0-100
-          const score = Math.min(100, Math.round(engagement / 5));
+      for (const post of posts) {
+        const engagement = (post.likes?.count || 0) + (post.reposts?.count || 0) * 3 + (post.comments?.count || 0) * 2;
+        const views = post.views?.count || 0;
+        const score = Math.min(100, Math.round(engagement / 5));
 
-          // Извлекаем первые 150 символов как заголовок
-          const text = post.text.replace(/\n/g, " ").trim();
-          const title = text.length > 150 ? text.slice(0, 147) + "..." : text;
+        const text = post.text.replace(/\n/g, " ").trim();
+        const title = text.length > 150 ? text.slice(0, 147) + "..." : text;
 
-          if (title.length < 20) continue; // слишком короткий
+        if (title.length < 20) continue;
 
-          items.push({
-            sourceId: this.sourceId,
-            title,
-            url: `https://vk.com/wall${post.owner_id}_${post.id}`,
-            score,
-            summary: `👍 ${post.likes?.count || 0} · 🔄 ${post.reposts?.count || 0} · 👁 ${views.toLocaleString("ru-RU")}`,
-            category: "business",
-            metadata: {
-              hashtag,
-              likes: post.likes?.count,
-              reposts: post.reposts?.count,
-              views,
-              comments: post.comments?.count,
-              engagement,
-              date: new Date(post.date * 1000).toISOString(),
-            },
-          });
-        }
-      } catch (error) {
-        console.error(`[VK] Ошибка для ${hashtag}:`, error);
+        items.push({
+          sourceId: this.sourceId,
+          title,
+          url: `https://vk.com/wall${post.owner_id}_${post.id}`,
+          score,
+          summary: `👍 ${post.likes?.count || 0} · 🔄 ${post.reposts?.count || 0} · 👁 ${views.toLocaleString("ru-RU")}`,
+          category: "business",
+          metadata: {
+            hashtag,
+            likes: post.likes?.count,
+            reposts: post.reposts?.count,
+            views,
+            comments: post.comments?.count,
+            engagement,
+            date: new Date(post.date * 1000).toISOString(),
+          },
+        });
       }
     }
 
@@ -98,7 +98,7 @@ export class VkTrendsCollector implements TrendCollector {
     url.searchParams.set("access_token", this.token);
     url.searchParams.set("v", VK_VERSION);
 
-    const res = await fetch(url.toString());
+    const res = await fetchWithTimeout(url.toString());
     if (!res.ok) {
       throw new Error(`VK API ${res.status}`);
     }

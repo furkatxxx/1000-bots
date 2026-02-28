@@ -2,42 +2,48 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
 
-// GET /api/trends — получить тренды из БД (за сегодня по умолчанию)
+// GET /api/trends — получить тренды из БД
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const source = searchParams.get("source"); // фильтр по источнику
-  const limit = Math.min(Number(searchParams.get("limit")) || 100, 500);
+  try {
+    const { searchParams } = new URL(request.url);
+    const source = searchParams.get("source");
+    const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 100, 1), 500);
 
-  const where: Record<string, unknown> = {};
-  if (source) where.sourceId = source;
+    const where: Record<string, unknown> = {};
+    if (source) where.sourceId = source;
 
-  const trends = await prisma.trendData.findMany({
-    where,
-    orderBy: { fetchedAt: "desc" },
-    take: limit,
-  });
+    const trends = await prisma.trendData.findMany({
+      where,
+      orderBy: { fetchedAt: "desc" },
+      take: limit,
+    });
 
-  return NextResponse.json({ trends, count: trends.length });
+    return NextResponse.json({ trends, count: trends.length });
+  } catch (error) {
+    console.error("[API /trends] Ошибка GET:", error);
+    return NextResponse.json({ error: "Ошибка загрузки трендов" }, { status: 500 });
+  }
 }
 
 // POST /api/trends — запустить сбор трендов из всех источников
 export async function POST() {
   try {
-    // Берём настройки
     const settings = await prisma.settings.findUnique({
       where: { id: "main" },
     });
 
-    // Список включённых источников
     const sources = await prisma.trendSource.findMany({
       where: { enabled: true },
     });
     const enabledSources = sources.map((s) => s.name);
 
-    // Собираем тренды
+    // Передаём ВСЕ API-ключи из настроек
     const items = await collectAll({
       newsApiKey: settings?.newsApiKey || undefined,
+      wordstatToken: settings?.wordstatToken || undefined,
       googleTrendsGeo: settings?.googleTrendsGeo || "US",
+      telemetrApiKey: settings?.telemetrApiKey || undefined,
+      vkServiceToken: settings?.vkServiceToken || undefined,
       enabledSources: enabledSources.length > 0 ? enabledSources : undefined,
     });
 
@@ -54,7 +60,7 @@ export async function POST() {
       })),
     });
 
-    // Обновляем время последнего запуска для каждого источника
+    // Обновляем время последнего запуска
     const sourcesUsed = [...new Set(items.map((i) => i.sourceId))];
     for (const name of sourcesUsed) {
       await prisma.trendSource.upsert({
@@ -62,10 +68,7 @@ export async function POST() {
         update: { lastRunAt: new Date() },
         create: {
           name,
-          label: name === "hacker_news" ? "Hacker News"
-            : name === "google_trends" ? "Google Trends"
-            : name === "news_api" ? "NewsAPI"
-            : name,
+          label: name,
           enabled: true,
           lastRunAt: new Date(),
         },

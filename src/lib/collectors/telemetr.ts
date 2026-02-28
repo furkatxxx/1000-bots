@@ -2,6 +2,7 @@
 // Бесплатно 1000 запросов/месяц, нужен API-ключ от @telemetrio_api_bot
 
 import type { TrendItem, TrendCollector } from "./base";
+import { fetchWithTimeout } from "@/lib/utils";
 
 const API_BASE = "https://api.telemetr.io/v1";
 
@@ -78,7 +79,7 @@ export class TelemetrCollector implements TrendCollector {
     url.searchParams.set("sort_direction", "desc");
     url.searchParams.set("limit", "20");
 
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       headers: {
         "x-api-key": this.apiKey,
         accept: "application/json",
@@ -91,6 +92,6 @@ export class TelemetrCollector implements TrendCollector {
     }
 
     const data = await res.json();
-    return data.items || data || [];
+    return data.items || (Array.isArray(data) ? data : []);
   }
 }

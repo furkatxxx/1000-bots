@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { fetchWithTimeout, concurrentMap } from "@/lib/utils";
 
 const HN_API = "https://hacker-news.firebaseio.com/v0";
 const TOP_STORIES_LIMIT = 30;
@@ -29,23 +30,25 @@ export class HackerNewsCollector implements TrendCollector {
 
   async collect(): Promise<TrendItem[]> {
     // Получаем список ID топ-историй
-    const res = await fetch(`${HN_API}/topstories.json`);
+    const res = await fetchWithTimeout(`${HN_API}/topstories.json`);
     if (!res.ok) throw new Error(`HN API error: ${res.status}`);
 
     const ids: number[] = await res.json();
     const topIds = ids.slice(0, TOP_STORIES_LIMIT);
 
-    // Загружаем каждую историю
-    const stories = await Promise.all(
-      topIds.map(async (id): Promise<HNStory | null> => {
+    // Загружаем истории пачками по 10 (не DDoS-им Firebase)
+    const stories = await concurrentMap<number, HNStory | null>(
+      topIds,
+      async (id) => {
         try {
-          const r = await fetch(`${HN_API}/item/${id}.json`);
+          const r = await fetchWithTimeout(`${HN_API}/item/${id}.json`);
           if (!r.ok) return null;
           return r.json();
         } catch {
           return null;
         }
-      })
+      },
+      10
     );
 
     // Находим максимальный score для нормализации

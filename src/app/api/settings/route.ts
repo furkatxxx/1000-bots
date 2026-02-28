@@ -1,70 +1,81 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+const ALLOWED_MODELS = [
+  "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-20250514",
+];
+
 // GET /api/settings — получить настройки
 export async function GET() {
-  const settings = await prisma.settings.findUnique({
-    where: { id: "main" },
-  });
-
-  if (!settings) {
-    // Создаём дефолтные настройки
-    const created = await prisma.settings.create({
-      data: { id: "main" },
+  try {
+    const settings = await prisma.settings.findUnique({
+      where: { id: "main" },
     });
-    return NextResponse.json({ settings: maskKeys(created) });
-  }
 
-  return NextResponse.json({ settings: maskKeys(settings) });
+    if (!settings) {
+      const created = await prisma.settings.create({
+        data: { id: "main" },
+      });
+      return NextResponse.json({ settings: maskKeys(created) });
+    }
+
+    return NextResponse.json({ settings: maskKeys(settings) });
+  } catch (error) {
+    console.error("[API /settings] Ошибка GET:", error);
+    return NextResponse.json({ error: "Ошибка загрузки настроек" }, { status: 500 });
+  }
 }
 
 // POST /api/settings — обновить настройки
 export async function POST(request: Request) {
-  const body = await request.json();
+  try {
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Невалидный JSON" }, { status: 400 });
+    }
 
-  const data: Record<string, unknown> = {};
+    const data: Record<string, unknown> = {};
+    const MAX_KEY_LENGTH = 500;
 
-  if (typeof body.anthropicApiKey === "string") {
-    data.anthropicApiKey = body.anthropicApiKey;
-  }
-  if (typeof body.newsApiKey === "string") {
-    data.newsApiKey = body.newsApiKey;
-  }
-  if (typeof body.googleTrendsGeo === "string") {
-    data.googleTrendsGeo = body.googleTrendsGeo;
-  }
-  if (typeof body.maxIdeasPerReport === "number") {
-    data.maxIdeasPerReport = Math.min(Math.max(body.maxIdeasPerReport, 1), 30);
-  }
-  if (typeof body.preferredModel === "string") {
-    data.preferredModel = body.preferredModel;
-  }
-  if (typeof body.wordstatToken === "string") {
-    data.wordstatToken = body.wordstatToken;
-  }
-  if (typeof body.telegramBotToken === "string") {
-    data.telegramBotToken = body.telegramBotToken;
-  }
-  if (typeof body.telegramChatId === "string") {
-    data.telegramChatId = body.telegramChatId;
-  }
-  if (typeof body.dadataApiKey === "string") {
-    data.dadataApiKey = body.dadataApiKey;
-  }
-  if (typeof body.telemetrApiKey === "string") {
-    data.telemetrApiKey = body.telemetrApiKey;
-  }
-  if (typeof body.vkServiceToken === "string") {
-    data.vkServiceToken = body.vkServiceToken;
-  }
+    // Строковые поля с лимитом длины
+    const stringFields = [
+      "anthropicApiKey", "newsApiKey", "wordstatToken",
+      "telegramBotToken", "telegramChatId",
+      "dadataApiKey", "telemetrApiKey", "vkServiceToken",
+      "googleTrendsGeo",
+    ];
 
-  const settings = await prisma.settings.upsert({
-    where: { id: "main" },
-    update: data,
-    create: { id: "main", ...data },
-  });
+    for (const field of stringFields) {
+      if (typeof body[field] === "string") {
+        const value = (body[field] as string).slice(0, MAX_KEY_LENGTH);
+        data[field] = value;
+      }
+    }
 
-  return NextResponse.json({ settings: maskKeys(settings) });
+    if (typeof body.maxIdeasPerReport === "number") {
+      data.maxIdeasPerReport = Math.min(Math.max(body.maxIdeasPerReport, 1), 30);
+    }
+
+    if (typeof body.preferredModel === "string") {
+      if (ALLOWED_MODELS.includes(body.preferredModel)) {
+        data.preferredModel = body.preferredModel;
+      }
+    }
+
+    const settings = await prisma.settings.upsert({
+      where: { id: "main" },
+      update: data,
+      create: { id: "main", ...data },
+    });
+
+    return NextResponse.json({ settings: maskKeys(settings) });
+  } catch (error) {
+    console.error("[API /settings] Ошибка POST:", error);
+    return NextResponse.json({ error: "Ошибка сохранения настроек" }, { status: 500 });
+  }
 }
 
 // Маскируем API-ключи для безопасности

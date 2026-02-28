@@ -1,6 +1,56 @@
+// fetch с таймаутом — предотвращает зависание при недоступных API
+export async function fetchWithTimeout(
+  url: string | URL,
+  options: RequestInit = {},
+  timeoutMs: number = 15000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url.toString(), {
+      ...options,
+      signal: controller.signal,
+    });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Параллельное выполнение с ограничением одновременных запросов
+export async function concurrentMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number = 5
+): Promise<R[]> {
+  const results: R[] = [];
+  const queue = [...items];
+  const executing: Promise<void>[] = [];
+
+  for (const item of queue) {
+    const p = fn(item).then((r) => {
+      results.push(r);
+    });
+    executing.push(p);
+
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+      executing.splice(
+        executing.findIndex((e) => e === p),
+        1
+      );
+    }
+  }
+
+  await Promise.all(executing);
+  return results;
+}
+
 // Форматирование даты на русском
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "Неверная дата";
   return d.toLocaleDateString("ru-RU", {
     day: "numeric",
     month: "long",

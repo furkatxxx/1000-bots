@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { fetchWithTimeout } from "@/lib/utils";
 
 // GitHub Trending — через Search API (бесплатно, 10 запросов/мин без токена)
 // Ищем репозитории, созданные за последнюю неделю, сортируем по звёздам
@@ -44,7 +45,7 @@ export class GitHubTrendingCollector implements TrendCollector {
 
       const url = `https://api.github.com/search/repositories?q=created:>${dateStr}&sort=stars&order=desc&per_page=20`;
 
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         headers: {
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "1000bots/1.0",

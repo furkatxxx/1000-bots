@@ -1,16 +1,7 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { fetchWithTimeout } from "@/lib/utils";
 
 // Product Hunt — парсим публичную RSS-ленту (не требует API-ключа)
-// Используем their front page API endpoint
-
-interface PHPost {
-  name: string;
-  tagline: string;
-  url: string;
-  votesCount: number;
-  commentsCount: number;
-  topics: string[];
-}
 
 function detectCategory(name: string, tagline: string, topics: string[]): string {
   const text = `${name} ${tagline} ${topics.join(" ")}`.toLowerCase();
@@ -29,9 +20,8 @@ export class ProductHuntCollector implements TrendCollector {
 
   async collect(): Promise<TrendItem[]> {
     try {
-      // Используем публичный RSS feed Product Hunt
-      const rssUrl = "https://www.producthunt.com/feed?category=undefined";
-      const res = await fetch(rssUrl, {
+      const rssUrl = "https://www.producthunt.com/feed";
+      const res = await fetchWithTimeout(rssUrl, {
         headers: {
           "User-Agent": "1000bots/1.0 (business trend collector)",
           Accept: "application/rss+xml, application/xml, text/xml",
@@ -39,7 +29,6 @@ export class ProductHuntCollector implements TrendCollector {
       });
 
       if (!res.ok) {
-        // Если RSS не работает, пробуем альтернативный метод
         return await this.collectFromFrontend();
       }
 
@@ -58,7 +47,6 @@ export class ProductHuntCollector implements TrendCollector {
 
   private parseRSS(xml: string): TrendItem[] {
     const items: TrendItem[] = [];
-    // Простой парсинг XML без зависимостей
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
 
@@ -69,11 +57,13 @@ export class ProductHuntCollector implements TrendCollector {
       const description = this.extractTag(itemXml, "description");
 
       if (title) {
+        // Нормализуем score в 0-100 (позиция → важность)
+        const score = Math.round(((20 - items.length) / 20) * 100);
         items.push({
           sourceId: this.sourceId,
           title,
           url: link || null,
-          score: 20 - items.length, // Позиция = важность (будет нормализовано)
+          score,
           summary: description ? description.slice(0, 200) : null,
           category: detectCategory(title, description || "", []),
           metadata: { source: "rss" },
@@ -92,10 +82,9 @@ export class ProductHuntCollector implements TrendCollector {
     return simpleMatch ? simpleMatch[1].trim() : null;
   }
 
-  // Альтернативный метод — использует Today page
   private async collectFromFrontend(): Promise<TrendItem[]> {
     const url = "https://www.producthunt.com/";
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
         Accept: "text/html",
@@ -107,8 +96,6 @@ export class ProductHuntCollector implements TrendCollector {
     }
 
     const html = await res.text();
-
-    // Извлекаем JSON-данные из HTML (Next.js data)
     const items: TrendItem[] = [];
     const titleRegex = /<h3[^>]*>([^<]+)<\/h3>/g;
     let titleMatch;
@@ -117,11 +104,12 @@ export class ProductHuntCollector implements TrendCollector {
     while ((titleMatch = titleRegex.exec(html)) !== null && idx < 15) {
       const title = titleMatch[1].trim();
       if (title.length > 3 && title.length < 100) {
+        const score = Math.round(((15 - idx) / 15) * 100);
         items.push({
           sourceId: this.sourceId,
           title,
           url: "https://www.producthunt.com",
-          score: 15 - idx,
+          score,
           summary: null,
           category: detectCategory(title, "", []),
           metadata: { source: "frontend" },

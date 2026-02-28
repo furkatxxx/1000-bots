@@ -1,6 +1,8 @@
 // Валидация спроса через Яндекс Вордстат
 // Использует уже подключённый API для проверки реального спроса
 
+import { fetchWithTimeout } from "@/lib/utils";
+
 const WORDSTAT_BASE = "https://api.wordstat.yandex.net";
 
 export interface WordstatValidation {
@@ -18,7 +20,7 @@ export async function validateDemand(
 ): Promise<WordstatValidation | null> {
   try {
     // 1. Получаем топ-запросы (поисковый объём)
-    const topRes = await fetch(`${WORDSTAT_BASE}/v1/topRequests`, {
+    const topRes = await fetchWithTimeout(`${WORDSTAT_BASE}/v1/topRequests`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -42,7 +44,7 @@ export async function validateDemand(
 
     // 2. Получаем динамику за 3 месяца
     const fromDate = getMonday90DaysAgo();
-    const dynRes = await fetch(`${WORDSTAT_BASE}/v1/dynamics`, {
+    const dynRes = await fetchWithTimeout(`${WORDSTAT_BASE}/v1/dynamics`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

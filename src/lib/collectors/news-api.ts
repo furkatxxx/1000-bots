@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { fetchWithTimeout } from "@/lib/utils";
 
 const NEWSAPI_BASE = "https://newsapi.org/v2";
 
@@ -42,18 +43,22 @@ export class NewsAPICollector implements TrendCollector {
     }
 
     try {
-      // Запрос 1: топ заголовки по технологиям
-      const headlinesUrl = `${NEWSAPI_BASE}/top-headlines?category=technology&language=en&pageSize=15&apiKey=${this.apiKey}`;
-      // Запрос 2: поиск по бизнес-ключевым словам
-      const searchUrl = `${NEWSAPI_BASE}/everything?q="startup" OR "AI tool" OR "business idea"&sortBy=popularity&pageSize=15&apiKey=${this.apiKey}`;
+      // API-ключ через заголовок (безопаснее, чем в URL)
+      const headers = { "X-Api-Key": this.apiKey };
+
+      const headlinesUrl = `${NEWSAPI_BASE}/top-headlines?category=technology&language=en&pageSize=15`;
+      const searchUrl = `${NEWSAPI_BASE}/everything?q="startup" OR "AI tool" OR "business idea"&sortBy=popularity&pageSize=15`;
 
       const [headlinesRes, searchRes] = await Promise.all([
-        fetch(headlinesUrl),
-        fetch(searchUrl),
+        fetchWithTimeout(headlinesUrl, { headers }),
+        fetchWithTimeout(searchUrl, { headers }),
       ]);
 
-      const headlines: NewsAPIResponse = await headlinesRes.json();
-      const search: NewsAPIResponse = await searchRes.json();
+      if (!headlinesRes.ok) console.warn(`[NewsAPI] headlines: ${headlinesRes.status}`);
+      if (!searchRes.ok) console.warn(`[NewsAPI] search: ${searchRes.status}`);
+
+      const headlines: NewsAPIResponse = headlinesRes.ok ? await headlinesRes.json() : { status: "error", totalResults: 0, articles: [] };
+      const search: NewsAPIResponse = searchRes.ok ? await searchRes.json() : { status: "error", totalResults: 0, articles: [] };
 
       // Объединяем, убираем дубликаты по URL
       const seen = new Set<string>();

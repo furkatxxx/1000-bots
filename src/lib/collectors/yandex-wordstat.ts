@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { fetchWithTimeout } from "@/lib/utils";
 
 const WORDSTAT_API = "https://api.wordstat.yandex.net";
 
@@ -108,7 +109,7 @@ export class YandexWordstatCollector implements TrendCollector {
   // Получить топ запросов по seed-фразе
   private async getTopRequests(seedPhrase: string): Promise<TrendItem[]> {
     try {
-      const res = await fetch(`${WORDSTAT_API}/v1/topRequests`, {
+      const res = await fetchWithTimeout(`${WORDSTAT_API}/v1/topRequests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json;charset=utf-8",
@@ -161,7 +162,7 @@ export class YandexWordstatCollector implements TrendCollector {
       const day = fromDate.getDay();
       fromDate.setDate(fromDate.getDate() - ((day + 6) % 7));
 
-      const res = await fetch(`${WORDSTAT_API}/v1/dynamics`, {
+      const res = await fetchWithTimeout(`${WORDSTAT_API}/v1/dynamics`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json;charset=utf-8",

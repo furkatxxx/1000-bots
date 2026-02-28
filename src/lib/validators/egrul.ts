@@ -1,6 +1,8 @@
 // egrul.itsoft.ru — финансовые данные компаний из ЕГРЮЛ
 // Бесплатно, 100 запросов/день, без регистрации
 
+import { fetchWithTimeout } from "@/lib/utils";
+
 const EGRUL_BASE = "https://egrul.itsoft.ru";
 
 export interface EgrulFinancials {
@@ -22,7 +24,7 @@ export interface EgrulYear {
 // Получить финансовые данные компании по ИНН
 export async function getCompanyFinancials(inn: string): Promise<EgrulFinancials | null> {
   try {
-    const res = await fetch(`${EGRUL_BASE}/fin/?inn=${inn}`, {
+    const res = await fetchWithTimeout(`${EGRUL_BASE}/fin/?inn=${inn}`, {
       headers: { Accept: "application/json" },
     });
 
@@ -98,8 +100,8 @@ export async function getMultipleFinancials(
 }
 
 // Форматирование суммы в рублях для отображения
-export function formatRubles(amount: number | null): string {
-  if (!amount) return "—";
+export function formatRubles(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) return "—";
   if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)} млрд ₽`;
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)} млн ₽`;
   if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)} тыс ₽`;

@@ -1,6 +1,8 @@
 // DaData API — поиск компаний по нише
 // Бесплатно 10K запросов/день, нужен API-ключ
 
+import { fetchWithTimeout } from "@/lib/utils";
+
 const DADATA_BASE = "https://suggestions.dadata.ru/suggestions/api/4_1/rs";
 
 export interface DadataCompany {
@@ -26,7 +28,7 @@ export interface DadataValidation {
 // Поиск кодов ОКВЭД по описанию ниши
 async function findOkvedCodes(query: string, apiKey: string): Promise<string[]> {
   try {
-    const res = await fetch(`${DADATA_BASE}/suggest/okved2`, {
+    const res = await fetchWithTimeout(`${DADATA_BASE}/suggest/okved2`, {
       method: "POST",
       headers: {
         Authorization: `Token ${apiKey}`,
@@ -63,7 +65,7 @@ async function findCompanies(
       body.okved = okvedCodes.slice(0, 10);
     }
 
-    const res = await fetch(`${DADATA_BASE}/suggest/party`, {
+    const res = await fetchWithTimeout(`${DADATA_BASE}/suggest/party`, {
       method: "POST",
       headers: {
         Authorization: `Token ${apiKey}`,
@@ -107,7 +109,7 @@ async function getFinancials(inn: string, apiKey: string): Promise<{
   employeeCount: number | null;
 }> {
   try {
-    const res = await fetch(`${DADATA_BASE}/findById/party`, {
+    const res = await fetchWithTimeout(`${DADATA_BASE}/findById/party`, {
       method: "POST",
       headers: {
         Authorization: `Token ${apiKey}`,

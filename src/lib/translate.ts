@@ -1,22 +1,30 @@
 import translate from "google-translate-api-x";
 
-// Переводит массив строк на русский (пакетно, чтобы не делать 50 запросов)
+const CHUNK_SIZE = 30; // Максимум строк за один запрос
+
+// Переводит массив строк на русский (пакетно, с разбиением на чанки)
 export async function translateToRussian(texts: string[]): Promise<string[]> {
   if (texts.length === 0) return [];
 
   try {
-    // Переводим пакетом — библиотека поддерживает массивы
-    const results = await translate(texts, { from: "en", to: "ru" });
+    // Разбиваем на чанки чтобы не перегружать API
+    const results: string[] = [];
 
-    if (Array.isArray(results)) {
-      return results.map((r: { text: string }) => r.text);
+    for (let i = 0; i < texts.length; i += CHUNK_SIZE) {
+      const chunk = texts.slice(i, i + CHUNK_SIZE);
+
+      const translated = await translate(chunk, { from: "en", to: "ru" });
+
+      if (Array.isArray(translated)) {
+        results.push(...translated.map((r: { text: string }) => r.text));
+      } else {
+        results.push((translated as { text: string }).text);
+      }
     }
 
-    // Если вернулся один результат (для одной строки)
-    return [(results as { text: string }).text];
+    return results;
   } catch (err) {
     console.error("[Translate] Ошибка перевода:", err);
-    // При ошибке возвращаем оригиналы
     return texts;
   }
 }
