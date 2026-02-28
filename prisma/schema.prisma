@@ -91,4 +91,6 @@ model Settings {
   telegramBotToken  String? // Токен Telegram-бота
   telegramChatId    String? // Chat ID для уведомлений
   dadataApiKey      String? // API-ключ DaData для валидации ниши
+  telemetrApiKey    String? // API-ключ Telemetr.io для Telegram-трендов
+  vkServiceToken    String? // Сервисный токен VK для трендов ВКонтакте
 }

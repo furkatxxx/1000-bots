@@ -62,6 +62,8 @@ export async function POST() {
       newsApiKey: settings.newsApiKey || undefined,
       wordstatToken: settings.wordstatToken || undefined,
       googleTrendsGeo: settings.googleTrendsGeo || "US",
+      telemetrApiKey: settings.telemetrApiKey || undefined,
+      vkServiceToken: settings.vkServiceToken || undefined,
       enabledSources: enabledSources.length > 0 ? enabledSources : undefined,
     });
 

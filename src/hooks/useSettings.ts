@@ -12,6 +12,8 @@ interface Settings {
   telegramBotToken: string;
   telegramChatId: string;
   dadataApiKey: string;
+  telemetrApiKey: string;
+  vkServiceToken: string;
 }
 
 export function useSettings() {

@@ -17,6 +17,8 @@ export default function SettingsPage() {
   const [tgBotToken, setTgBotToken] = useState("");
   const [tgChatId, setTgChatId] = useState("");
   const [dadataKey, setDadataKey] = useState("");
+  const [telemetrKey, setTelemetrKey] = useState("");
+  const [vkToken, setVkToken] = useState("");
   const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
@@ -24,6 +26,8 @@ export default function SettingsPage() {
     github_trending: true,
     product_hunt: true,
     yandex_wordstat: true,
+    telemetr: false,
+    vk_trends: false,
   });
 
   // Заполняем форму когда настройки загрузились
@@ -38,6 +42,8 @@ export default function SettingsPage() {
       setTgBotToken(settings.telegramBotToken || "");
       setTgChatId(settings.telegramChatId || "");
       setDadataKey(settings.dadataApiKey || "");
+      setTelemetrKey(settings.telemetrApiKey || "");
+      setVkToken(settings.vkServiceToken || "");
     }
   }, [settings]);
 
@@ -89,6 +95,12 @@ export default function SettingsPage() {
     }
     if (dadataKey && !dadataKey.includes("••••")) {
       updates.dadataApiKey = dadataKey;
+    }
+    if (telemetrKey && !telemetrKey.includes("••••")) {
+      updates.telemetrApiKey = telemetrKey;
+    }
+    if (vkToken && !vkToken.includes("••••")) {
+      updates.vkServiceToken = vkToken;
     }
 
     const ok = await save(updates);
@@ -260,6 +272,48 @@ export default function SettingsPage() {
           />
         </div>
 
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            Ключ Telemetr.io
+          </label>
+          <input
+            type="password"
+            value={telemetrKey}
+            onChange={(e) => setTelemetrKey(e.target.value)}
+            placeholder="API-ключ от Telemetr.io"
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Тренды Telegram. Получить:{" "}
+            <a href="https://t.me/telemetrio_api_bot" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--primary)" }}>
+              @telemetrio_api_bot
+            </a>
+            {" "}→ /api_key
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            VK сервисный токен
+          </label>
+          <input
+            type="password"
+            value={vkToken}
+            onChange={(e) => setVkToken(e.target.value)}
+            placeholder="Сервисный токен VK"
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Тренды ВКонтакте.{" "}
+            <a href="https://dev.vk.com/ru" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--primary)" }}>
+              Создать приложение VK
+            </a>
+            {" "}→ сервисный ключ
+          </p>
+        </div>
+
         {/* Telegram */}
         <h2 className="mb-4 text-lg font-semibold">Telegram-уведомления</h2>
 
@@ -315,6 +369,8 @@ export default function SettingsPage() {
             { key: "product_hunt", label: "Product Hunt", desc: "Новые стартапы и продукты каждый день" },
             { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы (глобально)" },
             { key: "news_api", label: "NewsAPI", desc: "Новости и статьи (нужен ключ)" },
+            { key: "telemetr", label: "Telemetr.io", desc: "Тренды Telegram — быстрорастущие каналы (нужен ключ)" },
+            { key: "vk_trends", label: "VK Тренды", desc: "Популярные посты ВКонтакте (нужен сервисный токен)" },
           ].map((source) => (
             <label
               key={source.key}
