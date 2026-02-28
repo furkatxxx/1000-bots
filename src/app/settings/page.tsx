@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [model, setModel] = useState("claude-haiku-4-5-20251001");
   const [tgBotToken, setTgBotToken] = useState("");
   const [tgChatId, setTgChatId] = useState("");
+  const [dadataKey, setDadataKey] = useState("");
   const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
@@ -36,6 +37,7 @@ export default function SettingsPage() {
       setModel(settings.preferredModel || "claude-haiku-4-5-20251001");
       setTgBotToken(settings.telegramBotToken || "");
       setTgChatId(settings.telegramChatId || "");
+      setDadataKey(settings.dadataApiKey || "");
     }
   }, [settings]);
 
@@ -84,6 +86,9 @@ export default function SettingsPage() {
     }
     if (tgChatId) {
       updates.telegramChatId = tgChatId;
+    }
+    if (dadataKey && !dadataKey.includes("••••")) {
+      updates.dadataApiKey = dadataKey;
     }
 
     const ok = await save(updates);
@@ -172,6 +177,32 @@ export default function SettingsPage() {
               oauth.yandex.ru
             </a>
             {" "}→ подать заявку на API Вордстата
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            Ключ DaData
+          </label>
+          <input
+            type="password"
+            value={dadataKey}
+            onChange={(e) => setDadataKey(e.target.value)}
+            placeholder="API-ключ от dadata.ru"
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Для валидации ниш (конкуренты, ОКВЭД). Бесплатно 10K запр/день.{" "}
+            <a
+              href="https://dadata.ru/api/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+              style={{ color: "var(--primary)" }}
+            >
+              Получить ключ
+            </a>
           </p>
         </div>
 

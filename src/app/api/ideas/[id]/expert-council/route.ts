@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { expertCouncil } from "@/lib/ai-brain";
+import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 
-// POST /api/ideas/[id]/expert-council — запустить экспертный совет
+// POST /api/ideas/[id]/expert-council — запустить экспертный совет с автовалидацией
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -33,6 +34,29 @@ export async function POST(
   }
 
   try {
+    // 1. Собираем данные для валидации (Вордстат + DaData + ЕГРЮЛ)
+    console.log("[Expert Council] Сбор данных валидации...");
+    const validationData = await collectValidationData({
+      ideaName: idea.name,
+      ideaDescription: idea.description,
+      targetAudience: idea.targetAudience,
+      wordstatToken: settings.wordstatToken || undefined,
+      dadataApiKey: settings.dadataApiKey || undefined,
+    });
+
+    const validationContext = formatValidationForPrompt(validationData);
+    const sourcesUsed: string[] = [];
+    if (validationData.wordstat) sourcesUsed.push("Вордстат");
+    if (validationData.dadata) sourcesUsed.push("DaData");
+    if (validationData.egrul.length > 0) sourcesUsed.push("ЕГРЮЛ");
+
+    if (sourcesUsed.length > 0) {
+      console.log(`[Expert Council] Данные собраны: ${sourcesUsed.join(", ")}`);
+    } else {
+      console.log("[Expert Council] Нет ключей для валидации — только AI-анализ");
+    }
+
+    // 2. Вызываем экспертный совет с данными валидации
     const result = await expertCouncil({
       idea: {
         name: idea.name,
@@ -46,6 +70,7 @@ export async function POST(
       },
       apiKey: settings.anthropicApiKey,
       model: settings.preferredModel || "claude-haiku-4-5-20251001",
+      validationContext: validationContext || undefined,
     });
 
     // Сохраняем в БД
@@ -58,6 +83,7 @@ export async function POST(
       analysis: result.analysis,
       cached: false,
       tokensUsed: result.tokensIn + result.tokensOut,
+      validationSources: sourcesUsed,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Неизвестная ошибка";

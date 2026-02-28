@@ -90,4 +90,5 @@ model Settings {
   preferredModel    String @default("claude-haiku-4-5-20251001")
   telegramBotToken  String? // Токен Telegram-бота
   telegramChatId    String? // Chat ID для уведомлений
+  dadataApiKey      String? // API-ключ DaData для валидации ниши
 }

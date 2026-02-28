@@ -11,6 +11,7 @@ interface Settings {
   preferredModel: string;
   telegramBotToken: string;
   telegramChatId: string;
+  dadataApiKey: string;
 }
 
 export function useSettings() {
