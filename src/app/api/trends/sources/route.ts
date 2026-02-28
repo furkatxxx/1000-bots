@@ -7,6 +7,7 @@ const DEFAULT_SOURCES = [
   { name: "news_api", label: "NewsAPI" },
   { name: "github_trending", label: "GitHub Trending" },
   { name: "product_hunt", label: "Product Hunt" },
+  { name: "yandex_wordstat", label: "Яндекс Вордстат" },
 ];
 
 // GET /api/trends/sources — список источников с их состоянием

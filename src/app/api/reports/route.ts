@@ -60,6 +60,7 @@ export async function POST() {
 
     const trendItems = await collectAll({
       newsApiKey: settings.newsApiKey || undefined,
+      wordstatToken: settings.wordstatToken || undefined,
       googleTrendsGeo: settings.googleTrendsGeo || "US",
       enabledSources: enabledSources.length > 0 ? enabledSources : undefined,
     });

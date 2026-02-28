@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 interface Settings {
   anthropicApiKey: string;
   newsApiKey: string;
+  wordstatToken: string;
   googleTrendsGeo: string;
   maxIdeasPerReport: number;
   preferredModel: string;

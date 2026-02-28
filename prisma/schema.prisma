@@ -83,6 +83,7 @@ model Settings {
   id                String @id @default("main")
   anthropicApiKey   String?
   newsApiKey        String?
+  wordstatToken     String? // OAuth-токен Яндекс Вордстат
   googleTrendsGeo   String @default("US")
   maxIdeasPerReport Int    @default(10)
   preferredModel    String @default("claude-haiku-4-5-20251001")

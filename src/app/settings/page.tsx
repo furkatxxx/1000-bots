@@ -10,6 +10,7 @@ export default function SettingsPage() {
 
   const [anthropicKey, setAnthropicKey] = useState("");
   const [newsKey, setNewsKey] = useState("");
+  const [wordstatToken, setWordstatToken] = useState("");
   const [geo, setGeo] = useState("US");
   const [maxIdeas, setMaxIdeas] = useState(10);
   const [model, setModel] = useState("claude-haiku-4-5-20251001");
@@ -19,6 +20,7 @@ export default function SettingsPage() {
     news_api: true,
     github_trending: true,
     product_hunt: true,
+    yandex_wordstat: true,
   });
 
   // Заполняем форму когда настройки загрузились
@@ -26,6 +28,7 @@ export default function SettingsPage() {
     if (settings) {
       setAnthropicKey(settings.anthropicApiKey || "");
       setNewsKey(settings.newsApiKey || "");
+      setWordstatToken(settings.wordstatToken || "");
       setGeo(settings.googleTrendsGeo || "US");
       setMaxIdeas(settings.maxIdeasPerReport || 10);
       setModel(settings.preferredModel || "claude-haiku-4-5-20251001");
@@ -68,6 +71,9 @@ export default function SettingsPage() {
     }
     if (newsKey && !newsKey.includes("••••")) {
       updates.newsApiKey = newsKey;
+    }
+    if (wordstatToken && !wordstatToken.includes("••••")) {
+      updates.wordstatToken = wordstatToken;
     }
 
     const ok = await save(updates);
@@ -115,7 +121,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
             Ключ NewsAPI
           </label>
@@ -129,6 +135,33 @@ export default function SettingsPage() {
           />
           <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
             Для сбора новостей (необязательно)
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            Токен Яндекс Вордстат
+          </label>
+          <input
+            type="password"
+            value={wordstatToken}
+            onChange={(e) => setWordstatToken(e.target.value)}
+            placeholder="OAuth-токен Яндекса"
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Для трендов рунета. Получить:{" "}
+            <a
+              href="https://oauth.yandex.ru/client/new/id/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+              style={{ color: "var(--primary)" }}
+            >
+              oauth.yandex.ru
+            </a>
+            {" "}→ подать заявку на API Вордстата
           </p>
         </div>
 
@@ -192,9 +225,10 @@ export default function SettingsPage() {
         <div className="mb-6 space-y-3">
           {[
             { key: "hacker_news", label: "Hacker News", desc: "Технологии, стартапы, программирование" },
+            { key: "yandex_wordstat", label: "Яндекс Вордстат", desc: "Поисковые тренды рунета — реальный спрос в РФ (нужен токен)" },
             { key: "github_trending", label: "GitHub Trending", desc: "Новые популярные репозитории — AI, SaaS, инструменты" },
             { key: "product_hunt", label: "Product Hunt", desc: "Новые стартапы и продукты каждый день" },
-            { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы" },
+            { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы (глобально)" },
             { key: "news_api", label: "NewsAPI", desc: "Новости и статьи (нужен ключ)" },
           ].map((source) => (
             <label

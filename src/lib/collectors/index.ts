@@ -4,10 +4,12 @@ import { GoogleTrendsCollector } from "./google-trends";
 import { NewsAPICollector } from "./news-api";
 import { GitHubTrendingCollector } from "./github-trending";
 import { ProductHuntCollector } from "./product-hunt";
+import { YandexWordstatCollector } from "./yandex-wordstat";
 import { translateToRussian } from "../translate";
 
 interface CollectorConfig {
   newsApiKey?: string;
+  wordstatToken?: string;
   googleTrendsGeo?: string;
   enabledSources?: string[];
 }
@@ -38,6 +40,9 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
   }
   if (enabled.includes("product_hunt")) {
     collectors.push(new ProductHuntCollector());
+  }
+  if (enabled.includes("yandex_wordstat") && config.wordstatToken) {
+    collectors.push(new YandexWordstatCollector(config.wordstatToken));
   }
 
   // Запускаем параллельно, не падаем если один источник сломался
@@ -76,4 +81,5 @@ export { GoogleTrendsCollector } from "./google-trends";
 export { NewsAPICollector } from "./news-api";
 export { GitHubTrendingCollector } from "./github-trending";
 export { ProductHuntCollector } from "./product-hunt";
+export { YandexWordstatCollector } from "./yandex-wordstat";
 export type { TrendItem } from "./base";

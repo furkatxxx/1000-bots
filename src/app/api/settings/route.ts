@@ -39,6 +39,9 @@ export async function POST(request: Request) {
   if (typeof body.preferredModel === "string") {
     data.preferredModel = body.preferredModel;
   }
+  if (typeof body.wordstatToken === "string") {
+    data.wordstatToken = body.wordstatToken;
+  }
 
   const settings = await prisma.settings.upsert({
     where: { id: "main" },
@@ -55,6 +58,7 @@ function maskKeys(settings: Record<string, unknown>) {
     ...settings,
     anthropicApiKey: maskString(settings.anthropicApiKey as string | null),
     newsApiKey: maskString(settings.newsApiKey as string | null),
+    wordstatToken: maskString(settings.wordstatToken as string | null),
   };
 }
 
