@@ -69,6 +69,7 @@ model BusinessIdea {
   successChance    Int?        // Шанс успеха 1-100 (оценка AI)
   estimatedRevenue String?     // Ожидаемый доход за 3 месяца
   timeToLaunch     String?     // Время до запуска (например "14 дней")
+  deepDive         String?     // Развёрнутый план реализации (markdown)
   rating           Int?        // Оценка пользователя 1-5
   isFavorite       Boolean     @default(false)
   isArchived       Boolean     @default(false)

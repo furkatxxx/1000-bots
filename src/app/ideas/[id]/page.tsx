@@ -12,37 +12,62 @@ export default function IdeaDetailPage({
   const { id } = use(params);
   const [idea, setIdea] = useState<IdeaDTO | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deepDiveLoading, setDeepDiveLoading] = useState(false);
 
   useEffect(() => {
     fetch(`/api/ideas/${id}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Не удалось загрузить идею");
+        return r.json();
+      })
       .then((data) => setIdea(data.idea))
-      .catch(() => {})
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
 
   async function handleRate(rating: number) {
     if (!idea) return;
-    await fetch(`/api/ideas/${id}`, {
+    const res = await fetch(`/api/ideas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rating: idea.rating === rating ? null : rating }),
     });
-    const res = await fetch(`/api/ideas/${id}`);
-    const data = await res.json();
-    setIdea(data.idea);
+    if (res.ok) {
+      const data = await res.json();
+      setIdea(data.idea);
+    }
   }
 
   async function handleToggleFavorite() {
     if (!idea) return;
-    await fetch(`/api/ideas/${id}`, {
+    const res = await fetch(`/api/ideas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isFavorite: !idea.isFavorite }),
     });
-    const res = await fetch(`/api/ideas/${id}`);
-    const data = await res.json();
-    setIdea(data.idea);
+    if (res.ok) {
+      const data = await res.json();
+      setIdea(data.idea);
+    }
+  }
+
+  async function handleDeepDive() {
+    if (!idea || deepDiveLoading) return;
+    setDeepDiveLoading(true);
+    try {
+      const res = await fetch(`/api/ideas/${id}/deep-dive`, { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setIdea((prev) => prev ? { ...prev, deepDive: data.deepDive } : prev);
+      }
+    } catch {
+      setError("Ошибка генерации Deep Dive");
+    } finally {
+      setDeepDiveLoading(false);
+    }
   }
 
   if (loading) {
@@ -50,6 +75,18 @@ export default function IdeaDetailPage({
       <div className="mx-auto max-w-3xl animate-fade-in">
         <div className="mb-6 h-8 w-48 animate-skeleton-pulse rounded" style={{ backgroundColor: "var(--muted)" }} />
         <div className="h-64 animate-skeleton-pulse rounded-2xl" style={{ backgroundColor: "var(--muted)" }} />
+      </div>
+    );
+  }
+
+  if (error && !idea) {
+    return (
+      <div className="mx-auto max-w-3xl animate-fade-in">
+        <h1 className="mb-4 text-3xl font-bold">Ошибка</h1>
+        <p className="mb-4 text-sm" style={{ color: "var(--destructive)" }}>{error}</p>
+        <Link href="/" className="text-sm font-medium" style={{ color: "var(--primary)" }}>
+          ← На дашборд
+        </Link>
       </div>
     );
   }
@@ -135,6 +172,13 @@ export default function IdeaDetailPage({
         </span>
       </div>
 
+      {/* Ошибка */}
+      {error && (
+        <div className="mb-4 rounded-xl p-3 text-sm" style={{ backgroundColor: "var(--destructive-light, #ff000010)", color: "var(--destructive)" }}>
+          {error}
+        </div>
+      )}
+
       {/* Ключевые метрики */}
       {(idea.successChance != null || idea.estimatedRevenue || idea.timeToLaunch) && (
         <div className="mb-6 grid grid-cols-3 gap-3">
@@ -197,6 +241,45 @@ export default function IdeaDetailPage({
         <InfoBlock title="Конкуренция" content={idea.competitionLevel} />
         <InfoBlock title="Подтверждение трендами" content={idea.trendBacking} />
         <InfoBlock title="План действий" content={idea.actionPlan} />
+      </div>
+
+      {/* Deep Dive — развёрнутый план */}
+      <div className="mt-6">
+        {idea.deepDive ? (
+          <div
+            className="rounded-2xl p-6"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xl">🔬</span>
+              <h3 className="text-lg font-bold">Deep Dive — Полный план реализации</h3>
+            </div>
+            <div className="prose prose-sm max-w-none whitespace-pre-line text-sm leading-relaxed">
+              {idea.deepDive}
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={handleDeepDive}
+            disabled={deepDiveLoading}
+            className="w-full cursor-pointer rounded-2xl p-5 text-center transition-all duration-200 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              backgroundColor: "var(--card)",
+              boxShadow: "var(--shadow-sm)",
+              border: "2px dashed var(--primary)",
+            }}
+          >
+            <span className="text-2xl">{deepDiveLoading ? "⏳" : "🔬"}</span>
+            <div className="mt-2 text-sm font-semibold" style={{ color: "var(--primary)" }}>
+              {deepDiveLoading ? "Генерирую полный план..." : "Deep Dive — Развернуть в полный план реализации"}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              {deepDiveLoading
+                ? "AI анализирует идею и создаёт детальный план..."
+                : "AI создаст: техническую архитектуру, MVP план, стратегию привлечения клиентов, монетизацию и риски"}
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );

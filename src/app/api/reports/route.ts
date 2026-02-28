@@ -64,6 +64,10 @@ export async function POST() {
       enabledSources: enabledSources.length > 0 ? enabledSources : undefined,
     });
 
+    if (trendItems.length === 0) {
+      throw new Error("Не удалось собрать тренды ни из одного источника. Проверьте настройки и подключение к интернету.");
+    }
+
     // Сохраняем тренды
     if (trendItems.length > 0) {
       await prisma.trendData.createMany({

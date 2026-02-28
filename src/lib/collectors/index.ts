@@ -2,6 +2,8 @@ import type { TrendItem } from "./base";
 import { HackerNewsCollector } from "./hacker-news";
 import { GoogleTrendsCollector } from "./google-trends";
 import { NewsAPICollector } from "./news-api";
+import { GitHubTrendingCollector } from "./github-trending";
+import { ProductHuntCollector } from "./product-hunt";
 import { translateToRussian } from "../translate";
 
 interface CollectorConfig {
@@ -16,6 +18,8 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
     "hacker_news",
     "google_trends",
     "news_api",
+    "github_trending",
+    "product_hunt",
   ];
 
   const collectors = [];
@@ -28,6 +32,12 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
   }
   if (enabled.includes("news_api") && config.newsApiKey) {
     collectors.push(new NewsAPICollector(config.newsApiKey));
+  }
+  if (enabled.includes("github_trending")) {
+    collectors.push(new GitHubTrendingCollector());
+  }
+  if (enabled.includes("product_hunt")) {
+    collectors.push(new ProductHuntCollector());
   }
 
   // Запускаем параллельно, не падаем если один источник сломался
@@ -64,4 +74,6 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
 export { HackerNewsCollector } from "./hacker-news";
 export { GoogleTrendsCollector } from "./google-trends";
 export { NewsAPICollector } from "./news-api";
+export { GitHubTrendingCollector } from "./github-trending";
+export { ProductHuntCollector } from "./product-hunt";
 export type { TrendItem } from "./base";

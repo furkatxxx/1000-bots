@@ -5,6 +5,8 @@ const DEFAULT_SOURCES = [
   { name: "hacker_news", label: "Hacker News" },
   { name: "google_trends", label: "Google Trends" },
   { name: "news_api", label: "NewsAPI" },
+  { name: "github_trending", label: "GitHub Trending" },
+  { name: "product_hunt", label: "Product Hunt" },
 ];
 
 // GET /api/trends/sources — список источников с их состоянием

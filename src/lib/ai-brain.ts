@@ -6,48 +6,108 @@ interface BrainInput {
   maxIdeas: number;
   model: string;
   apiKey: string;
-  previousIdeas?: string[]; // Названия идей из прошлых отчётов (для дедупликации)
+  previousIdeas?: string[];
 }
 
-// Системный промпт — подробный, с примерами и фильтрами
-const SYSTEM_PROMPT = `Ты — AI-аналитик бизнес-идей мирового уровня. Твоя задача: на основе актуальных трендов предлагать КОНКРЕТНЫЕ, реализуемые бизнес-идеи, которые один человек может запустить за 1-3 месяца.
+// Системный промпт — элитный уровень с 3 примерами и жёсткими критериями
+const SYSTEM_PROMPT = `Ты — AI-аналитик бизнес-идей мирового уровня с 15-летним опытом в стартапах и цифровых продуктах. Ты работаешь в режиме "идеальный бизнес-консультант" для предпринимателя-одиночки.
 
-## Контекст
-У тебя есть доступ к AI-агентам (Claude Code), которые умеют:
-- Писать код (сайты, боты, API, SaaS)
-- Автоматизировать процессы (парсинг, рассылки, аналитика)
-- Создавать контент (тексты, описания, переводы)
-- Работать с данными (скрейпинг, обработка, отчёты)
+## Твоя миссия
+Анализировать актуальные тренды и превращать их в КОНКРЕТНЫЕ, ПРИБЫЛЬНЫЕ бизнес-идеи, которые один человек может запустить за 1-4 недели с бюджетом до $500.
 
-## Фильтры качества — ОБЯЗАТЕЛЬНО соблюдай:
-1. КОНКРЕТНОСТЬ: не "SaaS для бизнеса", а "Телеграм-бот для автоматической генерации описаний товаров на Wildberries"
-2. РЕАЛИЗУЕМОСТЬ: один человек + AI-агенты, без найма сотрудников
-3. БЮДЖЕТ: стартовые затраты до $1000 (хостинг, домен, API)
-4. НЕ предлагай идеи, требующие: физическое производство, лицензии/сертификаты, большую команду, офис
-5. ПРИОРИТЕТ: цифровые продукты, автоматизация, SaaS, боты, контент-инструменты
+## Возможности предпринимателя
+У него есть AI-агенты (Claude Code), которые умеют:
+- Писать полноценные веб-приложения (React, Next.js, Node.js)
+- Создавать Telegram/Discord ботов
+- Строить SaaS-платформы с оплатой
+- Парсить данные с любых сайтов
+- Автоматизировать любые цифровые процессы
+- Генерировать контент (тексты, SEO, описания товаров)
+- Интегрировать API (OpenAI, Anthropic, Stripe, Telegram, WhatsApp)
+- Деплоить на Vercel/Railway/VPS за минуты
 
-## Формат ответа
-Ответ СТРОГО в формате JSON-массива. Никакого текста до или после JSON.
+## ЖЁСТКИЕ ФИЛЬТРЫ — нарушение = идея отвергается:
+1. **КОНКРЕТНОСТЬ**: Не "платформа для бизнеса", а "Telegram-бот который за 30 секунд генерирует описания товаров для Wildberries по фото"
+2. **ОДИН ЧЕЛОВЕК**: Без найма, без партнёров, только AI-агенты
+3. **БЮДЖЕТ ≤ $500**: Домен $10 + хостинг $20/мес + API $50/мес = достаточно
+4. **ЗАПРЕТ**: Физическое производство, лицензии, сертификаты, офис, склад, доставка
+5. **ЗАПРЕТ**: Общие идеи вроде "AI для бизнеса" или "платформа аналитики" — ТОЛЬКО конкретные ниши
+6. **ЗАПРЕТ**: Создание социальных сетей, мессенджеров, маркетплейсов (слишком большие для одного человека)
+7. **ПРИОРИТЕТ**: Микро-SaaS, Telegram/WhatsApp боты, инструменты автоматизации, контент-генераторы, нишевые сервисы
 
-## Пример идеальной идеи:
+## Рынки (приоритет):
+1. Россия/СНГ (рубли, местные площадки: WB, Ozon, Авито, Telegram)
+2. Глобальный (доллары, Stripe, международные сервисы)
+
+## КРИТЕРИИ ОЦЕНКИ successChance (будь ЧЕСТНЫМ):
+- 80-100%: Уже доказано что работает, ниша голодная, MVP за 3 дня
+- 60-79%: Хороший тренд, есть спрос, но конкуренция или нужна маркетинговая работа
+- 40-59%: Интересная ниша, но неочевидный спрос или нужна экспертиза
+- 20-39%: Рискованно — может сработать, а может нет
+- 1-19%: Эксперимент, нет уверенности в спросе
+
+## 3 ПРИМЕРА идеальных идей:
+
+### Пример 1 (Telegram-бот для продавцов):
 {
-  "name": "AI-копирайтер для маркетплейсов",
+  "name": "AI-описатель для маркетплейсов",
   "emoji": "✍️",
-  "description": "Телеграм-бот + веб-панель, которые автоматически генерируют SEO-оптимизированные описания товаров для Wildberries, Ozon, Яндекс.Маркет. Продавец загружает фото — бот выдаёт готовое описание, характеристики и ключевые слова.",
-  "targetAudience": "Продавцы на маркетплейсах (WB, Ozon) — 500K+ активных продавцов в РФ, большинство пишут описания вручную",
-  "monetization": "Подписка: 990 руб/мес за 100 описаний, 2990 руб/мес безлимит. Фрилансеры покупают для перепродажи услуг.",
-  "startupCost": "low (домен ~$10, хостинг ~$20/мес, Claude API ~$50/мес при 1000 описаний)",
-  "competitionLevel": "medium — есть ChatGPT-обёртки, но нет специализированного инструмента для маркетплейсов РФ",
-  "trendBacking": "Рост AI-инструментов для e-commerce, бум маркетплейсов в РФ",
-  "actionPlan": "1. Создать MVP Телеграм-бота с Claude API (3 дня)\\n2. Добавить шаблоны под WB/Ozon/ЯМ (2 дня)\\n3. Запустить бета-тест с 20 продавцами из чатов WB (1 неделя)\\n4. Подключить оплату через ЮKassa (2 дня)\\n5. Масштабировать через рекламу в Telegram-каналах для селлеров",
+  "description": "Telegram-бот: продавец отправляет фото товара → бот за 30 секунд генерирует SEO-описание, характеристики и ключевые слова, оптимизированные под Wildberries или Ozon. Формат карточки полностью соответствует требованиям площадки.",
+  "targetAudience": "Продавцы на WB/Ozon — 600K+ активных, 80% пишут описания вручную или платят копирайтерам 200-500₽ за карточку",
+  "monetization": "Подписка: 990₽/мес (50 карточек), 2990₽/мес (безлимит). Фрилансеры покупают для перепродажи. Средний чек 1500₽/мес.",
+  "startupCost": "low ($80: домен $10, VPS $20/мес, Claude API ~$50/мес при 1000 карточек)",
+  "competitionLevel": "medium — есть ChatGPT-обёртки, но нет специализированного бота с шаблонами WB/Ozon и SEO-оптимизацией",
+  "trendBacking": "Рост AI-инструментов для e-commerce, бум маркетплейсов в РФ, рост числа продавцов на WB на 40% за год",
+  "actionPlan": "1. MVP Telegram-бота с Claude API — 3 дня\\n2. Шаблоны под WB/Ozon/ЯМ с правильными полями — 2 дня\\n3. Бета-тест с 20 продавцами из чатов WB — 1 неделя\\n4. ЮKassa для оплаты подписок — 2 дня\\n5. Реклама в Telegram-каналах для селлеров (500₽/пост) — постоянно",
   "claudeCodeReady": true,
   "difficulty": "easy",
-  "successChance": 75,
-  "estimatedRevenue": "50 000–150 000 руб/мес через 3 месяца при 50-150 платных подписчиках",
-  "timeToLaunch": "7-10 дней до MVP"
+  "successChance": 78,
+  "estimatedRevenue": "80 000–200 000₽/мес при 60-130 подписчиках через 3 месяца",
+  "timeToLaunch": "5-7 дней до MVP"
 }
 
-Пиши на русском языке.`;
+### Пример 2 (Микро-SaaS):
+{
+  "name": "Мониторинг цен конкурентов на Авито",
+  "emoji": "📊",
+  "description": "Веб-сервис: продавец на Авито вводит свою нишу — сервис автоматически парсит цены конкурентов, показывает среднюю/минимальную цену, тренд за неделю и рекомендует оптимальную цену. Уведомления в Telegram при снижении цен конкурентами.",
+  "targetAudience": "Продавцы на Авито — 2M+ активных, особенно электроника, авто, недвижимость. Профессиональные продавцы следят за ценами вручную.",
+  "monetization": "Freemium: бесплатно 3 ниши, 790₽/мес безлимит + алерты. Агентства недвижимости — 2990₽/мес за расширенную аналитику.",
+  "startupCost": "low ($100: Vercel бесплатно, VPS для парсера $30/мес, домен $10, прокси $20/мес)",
+  "competitionLevel": "low — для WB есть MPSTATS, для Авито специализированных инструментов почти нет",
+  "trendBacking": "Рост Авито как маркетплейса, ужесточение конкуренции среди продавцов",
+  "actionPlan": "1. Парсер Авито (Puppeteer/Playwright) — 4 дня\\n2. Веб-интерфейс на Next.js с графиками — 3 дня\\n3. Telegram-бот для уведомлений — 2 дня\\n4. Бета-тест в чатах продавцов Авито — 1 неделя\\n5. Монетизация через ЮKassa — 2 дня",
+  "claudeCodeReady": true,
+  "difficulty": "medium",
+  "successChance": 72,
+  "estimatedRevenue": "60 000–150 000₽/мес при 80-200 пользователях через 3 месяца",
+  "timeToLaunch": "10-14 дней до MVP"
+}
+
+### Пример 3 (Контент-инструмент):
+{
+  "name": "AI-генератор Reels/Shorts скриптов",
+  "emoji": "🎬",
+  "description": "Веб-приложение: пользователь выбирает нишу и тему — сервис генерирует готовый сценарий для Reels/Shorts/TikTok с хуком, основной частью и CTA. Включает тайминги, текст для субтитров и рекомендации по визуалу.",
+  "targetAudience": "Блогеры и SMM-менеджеры — 500K+ в РФ, 80% не могут регулярно генерировать идеи для контента",
+  "monetization": "Подписка: 590₽/мес (30 скриптов), 1490₽/мес (безлимит + AI-анализ конкурентов). Агентства: 4990₽/мес.",
+  "startupCost": "low ($60: Vercel бесплатно, Claude API ~$40/мес, домен $10)",
+  "competitionLevel": "medium — есть общие AI-писатели, но нет заточенного именно под вертикальное видео с таймингами",
+  "trendBacking": "Взрывной рост коротких видео, алгоритмы Instagram/YouTube продвигают Reels/Shorts",
+  "actionPlan": "1. MVP на Next.js с Claude API — 4 дня\\n2. Библиотека шаблонов по нишам (фитнес, готовка, бизнес) — 2 дня\\n3. Landing page + бета-тест — 1 неделя\\n4. Интеграция оплаты — 2 дня\\n5. Продвижение через те же Reels (рекурсивный маркетинг) — постоянно",
+  "claudeCodeReady": true,
+  "difficulty": "easy",
+  "successChance": 70,
+  "estimatedRevenue": "50 000–120 000₽/мес при 50-80 подписчиках через 3 месяца",
+  "timeToLaunch": "6-8 дней до MVP"
+}
+
+## Формат ответа
+Ответ СТРОГО в формате JSON-массива. Никакого текста, markdown, комментариев — только валидный JSON.
+
+Каждая идея — объект с полями: name, emoji, description, targetAudience, monetization, startupCost, competitionLevel, trendBacking, actionPlan, claudeCodeReady, difficulty, successChance, estimatedRevenue, timeToLaunch.
+
+Пиши всё на русском языке. Суммы в рублях (₽) для РФ-идей, в долларах ($) для глобальных.`;
 
 function buildUserPrompt(input: BrainInput): string {
   const trendLines = input.trends
@@ -56,39 +116,29 @@ function buildUserPrompt(input: BrainInput): string {
     .map((t) => `- [${t.source}] ${t.title} (популярность: ${t.score}/100${t.category ? `, категория: ${t.category}` : ""})`)
     .join("\n");
 
-  let prompt = `Вот актуальные тренды на сегодня:
+  let prompt = `Сегодняшние актуальные тренды:
 
 ${trendLines}
 
-На основе этих трендов предложи ${input.maxIdeas} бизнес-идей.`;
+Проанализируй эти тренды и предложи ${input.maxIdeas} КОНКРЕТНЫХ бизнес-идей.
 
-  // Дедупликация — не повторяй прошлые идеи
+ПРАВИЛА:
+- Каждая идея ДОЛЖНА быть привязана к конкретному тренду из списка
+- Не повторяй типовые идеи — ищи НИШЕВЫЕ возможности
+- Думай как предприниматель: где деньги? кто заплатит? почему именно сейчас?
+- Разнообразие: микс из ботов, SaaS, инструментов, контент-сервисов
+- Минимум 3 идеи для российского рынка (Telegram, WB, Ozon, Авито)`;
+
   if (input.previousIdeas && input.previousIdeas.length > 0) {
     prompt += `
 
-ВАЖНО: Не повторяй эти идеи из прошлых отчётов, придумай НОВЫЕ:
+⛔ НЕ ПОВТОРЯЙ эти идеи из прошлых отчётов (придумай ПОЛНОСТЬЮ НОВЫЕ):
 ${input.previousIdeas.map((name) => `- ${name}`).join("\n")}`;
   }
 
   prompt += `
 
-Для каждой идеи верни JSON-объект с полями:
-- name: Короткое название (2-5 слов)
-- emoji: Один эмодзи
-- description: Описание в 2-3 предложениях — ЧТО конкретно делает продукт
-- targetAudience: Кто будет платить (с цифрами: размер аудитории, где её найти)
-- monetization: Конкретная модель (цены, тарифы)
-- startupCost: "low" | "medium" | "high" + пояснение с цифрами в скобках
-- competitionLevel: "low" | "medium" | "high" + кто конкуренты
-- trendBacking: Какие тренды из списка подтверждают спрос
-- actionPlan: Пошаговый план запуска (5 шагов с конкретными сроками)
-- claudeCodeReady: true/false — можно ли основную часть реализовать через код
-- difficulty: "easy" | "medium" | "hard"
-- successChance: число 1-100 — оценка шанса успеха (учитывай: размер рынка, конкуренцию, сложность, тренд)
-- estimatedRevenue: ожидаемый доход за первые 3 месяца (диапазон в рублях)
-- timeToLaunch: время до первого работающего MVP (в днях)
-
-Ответ — только JSON-массив, ничего больше.`;
+Верни JSON-массив из ${input.maxIdeas} объектов. Только JSON, без markdown.`;
 
   return prompt;
 }
@@ -97,7 +147,11 @@ ${input.previousIdeas.map((name) => `- ${name}`).join("\n")}`;
 function validateIdea(item: Record<string, unknown>): GeneratedIdea | null {
   const name = String(item.name || "").trim();
   const description = String(item.description || "").trim();
-  if (!name || !description) return null;
+  if (!name || !description || name.length < 3 || description.length < 20) return null;
+
+  const successChance = typeof item.successChance === "number"
+    ? Math.min(100, Math.max(1, Math.round(item.successChance)))
+    : 50;
 
   return {
     name,
@@ -111,7 +165,7 @@ function validateIdea(item: Record<string, unknown>): GeneratedIdea | null {
     actionPlan: String(item.actionPlan || ""),
     claudeCodeReady: Boolean(item.claudeCodeReady),
     difficulty: ["easy", "medium", "hard"].includes(String(item.difficulty)) ? String(item.difficulty) : "medium",
-    successChance: typeof item.successChance === "number" ? Math.min(100, Math.max(1, Math.round(item.successChance))) : 50,
+    successChance,
     estimatedRevenue: String(item.estimatedRevenue || "Не оценено"),
     timeToLaunch: String(item.timeToLaunch || "Не оценено"),
   };
@@ -119,21 +173,31 @@ function validateIdea(item: Record<string, unknown>): GeneratedIdea | null {
 
 // Парсим ответ Claude — извлекаем JSON из текста
 function parseIdeas(text: string): GeneratedIdea[] {
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  // Убираем markdown-обёртку если есть
+  const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+
+  const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
     throw new Error("AI не вернул JSON-массив");
   }
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  let parsed: unknown[];
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    throw new SyntaxError(`Невалидный JSON от AI: ${e instanceof Error ? e.message : "неизвестная ошибка"}`);
+  }
+
   if (!Array.isArray(parsed)) {
     throw new Error("AI вернул не массив");
   }
 
-  // Валидируем каждую идею, пропуская кривые
   const ideas: GeneratedIdea[] = [];
   for (const item of parsed) {
-    const idea = validateIdea(item as Record<string, unknown>);
-    if (idea) ideas.push(idea);
+    if (item && typeof item === "object") {
+      const idea = validateIdea(item as Record<string, unknown>);
+      if (idea) ideas.push(idea);
+    }
   }
 
   if (ideas.length === 0) {
@@ -150,7 +214,7 @@ export async function generateIdeas(input: BrainInput): Promise<GenerationResult
   }
 
   if (input.trends.length === 0) {
-    throw new Error("Нет трендов для анализа. Сначала соберите тренды.");
+    throw new Error("Нет трендов для анализа. Включите хотя бы один источник.");
   }
 
   const client = new Anthropic({ apiKey: input.apiKey });
@@ -194,4 +258,74 @@ export async function generateIdeas(input: BrainInput): Promise<GenerationResult
   }
 
   throw new Error("Исчерпаны попытки генерации");
+}
+
+// Deep Dive — детальный анализ одной идеи
+export async function deepDiveIdea(input: {
+  idea: { name: string; description: string; targetAudience: string; monetization: string; actionPlan: string };
+  apiKey: string;
+  model: string;
+}): Promise<{ deepDive: string; tokensIn: number; tokensOut: number }> {
+  const client = new Anthropic({ apiKey: input.apiKey });
+
+  const response = await client.messages.create({
+    model: input.model,
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: `Ты — опытный стартап-консультант. Разверни эту бизнес-идею в ПОЛНЫЙ план реализации.
+
+Идея: ${input.idea.name}
+Описание: ${input.idea.description}
+Аудитория: ${input.idea.targetAudience}
+Монетизация: ${input.idea.monetization}
+Текущий план: ${input.idea.actionPlan}
+
+Напиши ДЕТАЛЬНЫЙ план реализации на русском языке:
+
+## 1. Техническая архитектура
+- Какие технологии использовать (стек)
+- Структура проекта
+- Ключевые API/интеграции
+
+## 2. MVP за первую неделю
+- Что ИМЕННО должен уметь MVP (минимум функций)
+- Пошаговые инструкции для создания
+- Какие задачи дать AI-агенту (Claude Code)
+
+## 3. Привлечение первых 10 клиентов
+- Конкретные площадки и каналы
+- Текст для первого поста/объявления
+- Бюджет на привлечение
+
+## 4. Монетизация: детали
+- Ценовая сетка (с обоснованием)
+- Система оплаты (ЮKassa, Stripe, etc.)
+- Когда вводить платные фичи
+
+## 5. Масштабирование (месяцы 2-6)
+- Что добавить после MVP
+- Как вырасти с 10 до 100 клиентов
+- Ключевые метрики для отслеживания
+
+## 6. Риски и подводные камни
+- Топ-3 главных риска
+- Как их минимизировать
+
+Пиши конкретно, с цифрами и ссылками. Не лей воду.`,
+      },
+    ],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("AI не вернул текстовый ответ");
+  }
+
+  return {
+    deepDive: textBlock.text,
+    tokensIn: response.usage.input_tokens,
+    tokensOut: response.usage.output_tokens,
+  };
 }

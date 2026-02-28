@@ -13,10 +13,12 @@ export default function SettingsPage() {
   const [geo, setGeo] = useState("US");
   const [maxIdeas, setMaxIdeas] = useState(10);
   const [model, setModel] = useState("claude-haiku-4-5-20251001");
-  const [sources, setSources] = useState({
+  const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
     news_api: true,
+    github_trending: true,
+    product_hunt: true,
   });
 
   // Заполняем форму когда настройки загрузились
@@ -190,6 +192,8 @@ export default function SettingsPage() {
         <div className="mb-6 space-y-3">
           {[
             { key: "hacker_news", label: "Hacker News", desc: "Технологии, стартапы, программирование" },
+            { key: "github_trending", label: "GitHub Trending", desc: "Новые популярные репозитории — AI, SaaS, инструменты" },
+            { key: "product_hunt", label: "Product Hunt", desc: "Новые стартапы и продукты каждый день" },
             { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы" },
             { key: "news_api", label: "NewsAPI", desc: "Новости и статьи (нужен ключ)" },
           ].map((source) => (
@@ -197,8 +201,8 @@ export default function SettingsPage() {
               key={source.key}
               className="flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all duration-200"
               style={{
-                borderColor: sources[source.key as keyof typeof sources] ? "var(--primary)" : "var(--border)",
-                backgroundColor: sources[source.key as keyof typeof sources] ? "var(--primary-light, #0071e308)" : "transparent",
+                borderColor: sources[source.key] ? "var(--primary)" : "var(--border)",
+                backgroundColor: sources[source.key] ? "var(--primary-light, #0071e308)" : "transparent",
               }}
             >
               <div>
@@ -209,7 +213,7 @@ export default function SettingsPage() {
               </div>
               <input
                 type="checkbox"
-                checked={sources[source.key as keyof typeof sources]}
+                checked={sources[source.key] ?? true}
                 onChange={(e) => setSources((prev) => ({ ...prev, [source.key]: e.target.checked }))}
                 className="h-5 w-5 cursor-pointer rounded accent-[var(--primary)]"
               />

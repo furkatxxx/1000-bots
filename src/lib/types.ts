@@ -1,6 +1,6 @@
 // Нормализованный тренд из любого источника
 export interface TrendItem {
-  sourceId: string; // "hacker_news" | "google_trends" | "news_api"
+  sourceId: string; // "hacker_news" | "google_trends" | "news_api" | "github_trending" | "product_hunt"
   title: string;
   url: string | null;
   score: number; // 0-100 нормализованная популярность
@@ -72,6 +72,7 @@ export interface IdeaDTO {
   successChance: number | null;
   estimatedRevenue: string | null;
   timeToLaunch: string | null;
+  deepDive: string | null;
   rating: number | null;
   isFavorite: boolean;
   isArchived: boolean;

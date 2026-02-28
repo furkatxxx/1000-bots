@@ -7,7 +7,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const body = await request.json();
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Невалидный JSON" }, { status: 400 });
+  }
 
   // Проверяем что идея существует
   const existing = await prisma.businessIdea.findUnique({ where: { id } });
@@ -46,7 +52,12 @@ export async function PATCH(
     data,
   });
 
-  return NextResponse.json({ idea: updated });
+  return NextResponse.json({
+    idea: {
+      ...updated,
+      createdAt: updated.createdAt.toISOString(),
+    },
+  });
 }
 
 // GET /api/ideas/[id] — получить одну идею
