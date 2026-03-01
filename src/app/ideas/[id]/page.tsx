@@ -3,6 +3,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import type { IdeaDTO, ExpertAnalysis, MarketScenarios, SkepticVerdict } from "@/lib/types";
+import { LaunchToolkit } from "./launch-toolkit";
 
 export default function IdeaDetailPage({
   params,
@@ -368,6 +369,16 @@ export default function IdeaDetailPage({
           </button>
         )}
       </div>
+
+      {/* #32-38 — Инструменты запуска */}
+      <LaunchToolkit
+        ideaId={id}
+        hasLanding={idea.landingHtml !== null}
+        hasAnalogs={idea.analogs !== null}
+        hasMarketAnalysis={idea.marketAnalysis !== null}
+        hasAdCopy={idea.adCopy !== null}
+        onLandingGenerated={() => setIdea((prev) => prev ? { ...prev, landingHtml: "[html]" } : prev)}
+      />
     </div>
   );
 }

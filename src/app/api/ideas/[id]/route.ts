@@ -107,6 +107,11 @@ export async function GET(
         ...idea,
         expertAnalysis,
         marketScenarios,
+        // Не передаём тяжёлые данные целиком — только флаги наличия
+        landingHtml: idea.landingHtml ? "[html]" : null,
+        analogs: idea.analogs || null,
+        marketAnalysis: idea.marketAnalysis || null,
+        adCopy: idea.adCopy || null,
         createdAt: idea.createdAt.toISOString(),
       },
     });

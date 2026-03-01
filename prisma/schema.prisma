@@ -73,12 +73,39 @@ model BusinessIdea {
   marketScenarios  String?     // JSON: сценарии развития для России и мирового рынка
   deepDive         String?     // Развёрнутый план реализации (markdown)
   expertAnalysis   String?     // JSON: анализ от экспертного совета (4 специалиста)
+  analogs          String?     // JSON: найденные аналоги на Product Hunt и GitHub (#32)
+  landingHtml      String?     // HTML лендинга для проверки спроса (#33)
+  marketAnalysis   String?     // JSON: TAM/SAM/SOM + SEO-анализ (#34, #35)
+  adCopy           String?     // JSON: тексты для рекламы (#36)
   rating           Int?        // Оценка пользователя 1-5
   isFavorite       Boolean     @default(false)
   isArchived       Boolean     @default(false)
   createdAt        DateTime    @default(now())
 
   @@index([reportId])
+}
+
+// Подписчики на лист ожидания (#37)
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  ideaId    String
+  email     String
+  name      String?
+  createdAt DateTime @default(now())
+
+  @@index([ideaId])
+  @@unique([ideaId, email])
+}
+
+// Метрики после запуска (#38)
+model IdeaMetric {
+  id        String   @id @default(cuid())
+  ideaId    String
+  name      String   // "visitors", "signups", "revenue", "conversion"
+  value     Float
+  date      DateTime @default(now())
+
+  @@index([ideaId, name])
 }
 
 // Глобальные настройки (одна запись с id="main")

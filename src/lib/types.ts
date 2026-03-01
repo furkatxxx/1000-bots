@@ -143,6 +143,10 @@ export interface IdeaDTO {
   marketScenarios: MarketScenarios | null;
   deepDive: string | null;
   expertAnalysis: ExpertAnalysis | null;
+  analogs: string | null;         // JSON: аналоги (#32)
+  landingHtml: string | null;     // HTML лендинга (#33)
+  marketAnalysis: string | null;  // JSON: TAM/SAM/SOM + SEO (#34, #35)
+  adCopy: string | null;          // JSON: рекламные тексты (#36)
   rating: number | null;
   isFavorite: boolean;
   isArchived: boolean;
