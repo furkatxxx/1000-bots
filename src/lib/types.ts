@@ -101,15 +101,24 @@ export interface FinancierVerdict extends ExpertVerdict {
   unitEconomics: string;
 }
 
+// Скептик (адвокат дьявола)
+export interface SkepticVerdict extends ExpertVerdict {
+  killerRisks: string[];     // «убийственные» риски — причины полного провала
+  failureScenario: string;   // самый вероятный сценарий неудачи
+  counterArguments: string;  // контраргументы к оптимистичным оценкам других экспертов
+}
+
 // Совокупный результат экспертного совета
 export interface ExpertAnalysis {
   tracker: TrackerVerdict;
   marketer: MarketerVerdict;
   product: ProductVerdict;
   financier: FinancierVerdict;
+  skeptic?: SkepticVerdict;  // 5-й эксперт, опционально для обратной совместимости
   finalVerdict: "launch" | "pivot" | "reject";
   finalScore: number; // средняя оценка 1-10
   summary: string;
+  debates?: string; // где эксперты не согласны друг с другом
 }
 
 // DTO для идеи в API

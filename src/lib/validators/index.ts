@@ -65,9 +65,70 @@ export async function collectValidationData(input: {
   return result;
 }
 
+// #28 — Автоматические вердикты на основе реальных данных (перед AI)
+function buildAutoVerdicts(data: ValidationData): string {
+  const verdicts: string[] = [];
+
+  if (data.wordstat) {
+    const ws = data.wordstat;
+    if (ws.monthlySearches > 10000) {
+      verdicts.push(`✅ СПРОС ВЫСОКИЙ — ${ws.monthlySearches.toLocaleString("ru-RU")} запросов/мес по "${ws.keyword}". Оценки маркетолога и трекера могут быть 7+.`);
+    } else if (ws.monthlySearches >= 1000) {
+      verdicts.push(`⚠️ СПРОС СРЕДНИЙ — ${ws.monthlySearches.toLocaleString("ru-RU")} запросов/мес по "${ws.keyword}". Рынок есть, но не огромный.`);
+    } else {
+      verdicts.push(`❌ СПРОС НИЗКИЙ — всего ${ws.monthlySearches.toLocaleString("ru-RU")} запросов/мес по "${ws.keyword}". Оценки маркетолога НЕ ВЫШЕ 5.`);
+    }
+
+    // Динамика
+    if (ws.dynamics.length >= 2) {
+      const first = ws.dynamics[0]?.count || 0;
+      const last = ws.dynamics[ws.dynamics.length - 1]?.count || 0;
+      if (last > first * 1.2) {
+        verdicts.push(`📈 Спрос РАСТЁТ: с ${first} до ${last} за последние месяцы.`);
+      } else if (last < first * 0.8) {
+        verdicts.push(`📉 Спрос ПАДАЕТ: с ${first} до ${last}. Это тревожный сигнал.`);
+      }
+    }
+  }
+
+  if (data.dadata) {
+    const dd = data.dadata;
+    if (dd.companiesFound > 50) {
+      verdicts.push(`❌ КОНКУРЕНЦИЯ ВЫСОКАЯ — ${dd.companiesFound} компаний в нише. Оценка продакта НЕ ВЫШЕ 5 без чёткого отличия от конкурентов.`);
+    } else if (dd.companiesFound >= 10) {
+      verdicts.push(`⚠️ КОНКУРЕНЦИЯ СРЕДНЯЯ — ${dd.companiesFound} компаний. Нужно уникальное предложение.`);
+    } else if (dd.companiesFound > 0) {
+      verdicts.push(`✅ КОНКУРЕНЦИЯ НИЗКАЯ — всего ${dd.companiesFound} компаний. Можно занять нишу.`);
+    } else {
+      verdicts.push(`🔍 КОМПАНИЙ НЕ НАЙДЕНО — либо ниша пуста, либо запрос слишком узкий.`);
+    }
+  }
+
+  if (data.egrul.length > 0) {
+    const avgRevenue = data.egrul.reduce((sum, e) => sum + (e.latestRevenue || 0), 0) / data.egrul.length;
+    if (avgRevenue > 10_000_000) {
+      verdicts.push(`✅ РЫНОК КРУПНЫЙ — средняя выручка конкурентов ${formatRubles(avgRevenue)}. Деньги в нише есть.`);
+    } else if (avgRevenue > 1_000_000) {
+      verdicts.push(`⚠️ РЫНОК СРЕДНИЙ — средняя выручка конкурентов ${formatRubles(avgRevenue)}.`);
+    } else {
+      verdicts.push(`❌ РЫНОК МАЛЕНЬКИЙ — средняя выручка конкурентов всего ${formatRubles(avgRevenue)}.`);
+    }
+  }
+
+  return verdicts.length > 0
+    ? `## АВТОВЕРДИКТ (на основе реальных данных — ВЕРЬ этим выводам):\n${verdicts.join("\n")}`
+    : "";
+}
+
 // Форматировать данные валидации в текст для AI-промпта
 export function formatValidationForPrompt(data: ValidationData): string {
   const parts: string[] = [];
+
+  // #28 — Сначала автовердикты (структурированные выводы)
+  const autoVerdicts = buildAutoVerdicts(data);
+  if (autoVerdicts) {
+    parts.push(autoVerdicts);
+  }
 
   // Вордстат
   if (data.wordstat) {

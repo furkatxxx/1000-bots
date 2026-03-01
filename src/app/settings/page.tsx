@@ -4,9 +4,19 @@ import { useState, useEffect } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { useToast } from "@/components/ui/Toast";
 
+interface BalanceResult {
+  service: string;
+  balance: number | null;
+  currency: string;
+  status: "ok" | "low" | "critical" | "error";
+  error?: string;
+}
+
 export default function SettingsPage() {
   const { settings, loading, saving, save } = useSettings();
   const { showToast } = useToast();
+  const [balanceChecking, setBalanceChecking] = useState(false);
+  const [balanceResults, setBalanceResults] = useState<BalanceResult[] | null>(null);
 
   const [anthropicKey, setAnthropicKey] = useState("");
   const [newsKey, setNewsKey] = useState("");
@@ -378,6 +388,63 @@ export default function SettingsPage() {
               @userinfobot
             </a>
           </p>
+        </div>
+
+        {/* Мониторинг балансов */}
+        <h2 className="mb-4 text-lg font-semibold">Мониторинг балансов</h2>
+        <div className="mb-6">
+          <button
+            onClick={async () => {
+              setBalanceChecking(true);
+              try {
+                const res = await fetch("/api/health/balances", { method: "POST" });
+                const data = await res.json();
+                if (data.results) {
+                  setBalanceResults(data.results);
+                  if (data.hasProblems) {
+                    showToast("Обнаружены проблемы с балансами!", "error");
+                  } else {
+                    showToast("Все сервисы работают", "success");
+                  }
+                }
+              } catch {
+                showToast("Ошибка проверки балансов", "error");
+              } finally {
+                setBalanceChecking(false);
+              }
+            }}
+            disabled={balanceChecking}
+            className="w-full cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 text-sm font-medium transition-all hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: "var(--warning, #f59e0b)", color: "var(--warning, #f59e0b)" }}
+          >
+            {balanceChecking ? "Проверяю балансы..." : "Проверить балансы API"}
+          </button>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Проверит работоспособность Anthropic и DaData. Если есть проблемы — пришлёт в Telegram.
+          </p>
+
+          {balanceResults && (
+            <div className="mt-3 space-y-2">
+              {balanceResults.map((r) => (
+                <div
+                  key={r.service}
+                  className="flex items-center justify-between rounded-xl px-4 py-2.5 text-sm"
+                  style={{
+                    backgroundColor: r.status === "ok" ? "rgba(34, 197, 94, 0.08)" : "rgba(239, 68, 68, 0.08)",
+                  }}
+                >
+                  <span className="font-medium">
+                    {r.status === "ok" ? "✅" : r.status === "critical" ? "🚨" : "❌"} {r.service}
+                  </span>
+                  <span className="text-xs" style={{
+                    color: r.status === "ok" ? "var(--success, #22c55e)" : "var(--destructive, #ef4444)",
+                  }}>
+                    {r.status === "ok" ? "Работает" : r.error || "Ошибка"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Источники трендов */}

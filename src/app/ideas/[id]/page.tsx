@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import type { IdeaDTO, ExpertAnalysis, MarketScenarios } from "@/lib/types";
+import type { IdeaDTO, ExpertAnalysis, MarketScenarios, SkepticVerdict } from "@/lib/types";
 
 export default function IdeaDetailPage({
   params,
@@ -319,12 +319,12 @@ export default function IdeaDetailPage({
           >
             <span className="text-2xl">{expertLoading ? "⏳" : "🧠"}</span>
             <div className="mt-2 text-sm font-semibold" style={{ color: "var(--warning, #f59e0b)" }}>
-              {expertLoading ? "Экспертный совет анализирует..." : "Экспертный совет — 4 специалиста оценят идею"}
+              {expertLoading ? "Экспертный совет анализирует..." : "Экспертный совет — 5 специалистов оценят идею"}
             </div>
             <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
               {expertLoading
-                ? "Трекер, маркетолог, продакт и финансист анализируют идею..."
-                : "Трекер, маркетолог, продакт-менеджер и финансист дадут оценку, риски и рекомендации"}
+                ? "Трекер, маркетолог, продакт, финансист и скептик анализируют идею..."
+                : "Трекер, маркетолог, продакт, финансист и скептик дадут оценку, риски и дебаты"}
             </div>
           </button>
         )}
@@ -384,7 +384,7 @@ function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
   const scoreColor = (score: number) =>
     score >= 7 ? "var(--success)" : score >= 5 ? "var(--warning)" : "var(--destructive)";
 
-  const experts = [
+  const experts: { emoji: string; title: string; score: number; verdict?: string; verdictColor?: string; content: React.ReactNode }[] = [
     {
       emoji: "🎯",
       title: "Трекер стартапов",
@@ -481,6 +481,40 @@ function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
     },
   ];
 
+  // #25 — Скептик (если есть — добавляем 5-ю карточку)
+  if (analysis.skeptic) {
+    experts.push({
+      emoji: "😈",
+      title: "Скептик",
+      score: analysis.skeptic.score,
+      content: (
+        <>
+          <div className="mb-2">
+            <span className="text-xs font-medium" style={{ color: "var(--destructive, #ef4444)" }}>Главные риски провала:</span>
+            <ul className="mt-1 space-y-0.5">
+              {analysis.skeptic.killerRisks.map((risk, i) => (
+                <li key={i} className="text-xs">• {risk}</li>
+              ))}
+            </ul>
+          </div>
+          {analysis.skeptic.failureScenario && (
+            <div className="mb-2 text-xs">
+              <span style={{ color: "var(--muted-foreground)" }}>Сценарий провала: </span>
+              <span>{analysis.skeptic.failureScenario}</span>
+            </div>
+          )}
+          {analysis.skeptic.counterArguments && (
+            <div className="mb-2 text-xs">
+              <span style={{ color: "var(--muted-foreground)" }}>Контраргументы: </span>
+              <span>{analysis.skeptic.counterArguments}</span>
+            </div>
+          )}
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>{analysis.skeptic.recommendation}</p>
+        </>
+      ),
+    });
+  }
+
   return (
     <div
       className="rounded-2xl p-6"
@@ -518,13 +552,32 @@ function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
         {analysis.summary}
       </div>
 
-      {/* 4 карточки экспертов */}
+      {/* #27 — Дебаты между экспертами */}
+      {analysis.debates && (
+        <div
+          className="mb-5 rounded-xl p-4"
+          style={{ backgroundColor: "var(--warning, #f59e0b)10", border: "1px solid var(--warning, #f59e0b)30" }}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <span>⚔️</span>
+            <span className="text-sm font-semibold">Дебаты экспертов</span>
+          </div>
+          <p className="whitespace-pre-line text-xs leading-relaxed" style={{ color: "var(--muted-foreground)" }}>
+            {analysis.debates}
+          </p>
+        </div>
+      )}
+
+      {/* 5 карточек экспертов */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {experts.map((expert) => (
           <div
             key={expert.title}
             className="rounded-xl p-4"
-            style={{ backgroundColor: "var(--background)", border: "1px solid var(--muted)" }}
+            style={{
+              backgroundColor: "var(--background)",
+              border: expert.title === "Скептик" ? "1px solid var(--destructive, #ef4444)30" : "1px solid var(--muted)",
+            }}
           >
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -532,12 +585,12 @@ function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
                 <span className="text-sm font-semibold">{expert.title}</span>
               </div>
               <div className="flex items-center gap-2">
-                {"verdict" in expert && "verdictColor" in expert && (
+                {expert.verdict && expert.verdictColor && (
                   <span
                     className="rounded-full px-2 py-0.5 text-xs font-bold"
-                    style={{ color: expert.verdictColor as string }}
+                    style={{ color: expert.verdictColor }}
                   >
-                    {expert.verdict as string}
+                    {expert.verdict}
                   </span>
                 )}
                 <span
