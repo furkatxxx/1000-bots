@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [dadataKey, setDadataKey] = useState("");
   const [telemetrKey, setTelemetrKey] = useState("");
   const [vkToken, setVkToken] = useState("");
+  const [siteUrl, setSiteUrl] = useState("");
   const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
@@ -44,6 +45,7 @@ export default function SettingsPage() {
       setDadataKey(settings.dadataApiKey || "");
       setTelemetrKey(settings.telemetrApiKey || "");
       setVkToken(settings.vkServiceToken || "");
+      setSiteUrl(settings.siteUrl || "");
     }
   }, [settings]);
 
@@ -101,6 +103,9 @@ export default function SettingsPage() {
     }
     if (vkToken && !vkToken.includes("••••")) {
       updates.vkServiceToken = vkToken;
+    }
+    if (siteUrl !== undefined) {
+      updates.siteUrl = siteUrl;
     }
 
     const ok = await save(updates);
@@ -316,6 +321,23 @@ export default function SettingsPage() {
 
         {/* Telegram */}
         <h2 className="mb-4 text-lg font-semibold">Telegram-уведомления</h2>
+
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+            URL сервиса
+          </label>
+          <input
+            type="url"
+            value={siteUrl}
+            onChange={(e) => setSiteUrl(e.target.value)}
+            placeholder="https://1000bots.railway.app"
+            className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
+          />
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Публичный адрес сервиса. Нужен для кликабельных ссылок на идеи в Telegram.
+          </p>
+        </div>
 
         <div className="mb-4">
           <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>

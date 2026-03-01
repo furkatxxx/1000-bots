@@ -56,10 +56,16 @@ export async function PATCH(
       try { expertAnalysis = JSON.parse(updated.expertAnalysis); } catch { /* skip */ }
     }
 
+    let marketScenarios = null;
+    if (updated.marketScenarios) {
+      try { marketScenarios = JSON.parse(updated.marketScenarios); } catch { /* skip */ }
+    }
+
     return NextResponse.json({
       idea: {
         ...updated,
         expertAnalysis,
+        marketScenarios,
         createdAt: updated.createdAt.toISOString(),
       },
     });
@@ -88,17 +94,19 @@ export async function GET(
 
     let expertAnalysis = null;
     if (idea.expertAnalysis) {
-      try {
-        expertAnalysis = JSON.parse(idea.expertAnalysis);
-      } catch {
-        // Битый JSON — пропускаем
-      }
+      try { expertAnalysis = JSON.parse(idea.expertAnalysis); } catch { /* skip */ }
+    }
+
+    let marketScenarios = null;
+    if (idea.marketScenarios) {
+      try { marketScenarios = JSON.parse(idea.marketScenarios); } catch { /* skip */ }
     }
 
     return NextResponse.json({
       idea: {
         ...idea,
         expertAnalysis,
+        marketScenarios,
         createdAt: idea.createdAt.toISOString(),
       },
     });

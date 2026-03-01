@@ -12,7 +12,7 @@ import { useReport } from "@/hooks/useReport";
 
 export default function DashboardPage() {
   const { reports, favoritesCount, loading: loadingReports, refetch: refetchReports } = useReports();
-  const { generate, generating } = useGenerate();
+  const { generate, generating, phase, healthCheck, resetError } = useGenerate();
   const { showToast } = useToast();
   const [sendingTg, setSendingTg] = useState(false);
 
@@ -76,6 +76,9 @@ export default function DashboardPage() {
           report={todayReport}
           onGenerate={handleGenerate}
           generating={generating}
+          phase={phase}
+          healthCheck={healthCheck}
+          onResetError={resetError}
         />
         {todayReport && todayReport.status === "complete" && (
           <button
@@ -112,6 +115,7 @@ export default function DashboardPage() {
 // Подкомпонент для топ-идей из отчёта (только лучшие по шансу + быстрый запуск)
 function TopIdeas({ reportId }: { reportId: string }) {
   const { report, loading } = useReport(reportId);
+  const [marketFilter, setMarketFilter] = useState<"all" | "russia" | "global">("all");
 
   if (loading) {
     return (
@@ -128,6 +132,7 @@ function TopIdeas({ reportId }: { reportId: string }) {
   const diffWeight: Record<string, number> = { easy: 1.3, medium: 1.0, hard: 0.7 };
   const topIdeas = [...report.ideas]
     .filter((idea) => !idea.isArchived)
+    .filter((idea) => marketFilter === "all" || idea.market === marketFilter || idea.market === "both")
     .map((idea) => ({
       ...idea,
       _rank: (idea.successChance || 0) * (diffWeight[idea.difficulty] || 1),
@@ -135,19 +140,51 @@ function TopIdeas({ reportId }: { reportId: string }) {
     .sort((a, b) => b._rank - a._rank)
     .slice(0, 4);
 
-  if (topIdeas.length === 0) return null;
+  if (topIdeas.length === 0 && marketFilter === "all") return null;
+
+  const marketOptions = [
+    { value: "all" as const, label: "Все" },
+    { value: "russia" as const, label: "🇷🇺 Россия" },
+    { value: "global" as const, label: "🌍 Мир" },
+  ];
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-semibold">🏆 Лучшие идеи</h2>
-      <p className="mb-4 text-xs" style={{ color: "var(--muted-foreground)" }}>
-        Отсортированы по шансу успеха и скорости запуска
-      </p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {topIdeas.map((idea) => (
-          <IdeaCard key={idea.id} idea={idea} />
-        ))}
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">🏆 Лучшие идеи</h2>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Отсортированы по шансу успеха и скорости запуска
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
+          {marketOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setMarketFilter(opt.value)}
+              className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
+              style={{
+                backgroundColor: marketFilter === opt.value ? "var(--card)" : "transparent",
+                color: marketFilter === opt.value ? "var(--foreground)" : "var(--muted-foreground)",
+                boxShadow: marketFilter === opt.value ? "var(--shadow-sm)" : "none",
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
+      {topIdeas.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {topIdeas.map((idea) => (
+            <IdeaCard key={idea.id} idea={idea} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl p-6 text-center text-sm" style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)", color: "var(--muted-foreground)" }}>
+          Нет идей для выбранного рынка
+        </div>
+      )}
     </div>
   );
 }

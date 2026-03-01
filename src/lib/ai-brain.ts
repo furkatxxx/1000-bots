@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { GenerationResult, GeneratedIdea, ExpertAnalysis } from "./types";
+import type { GenerationResult, GeneratedIdea, ExpertAnalysis, MarketScenarios } from "./types";
 
 interface BrainInput {
   trends: { title: string; score: number; source: string; category?: string }[];
@@ -35,9 +35,17 @@ const SYSTEM_PROMPT = `Ты — AI-аналитик бизнес-идей мир
 6. **ЗАПРЕТ**: Создание социальных сетей, мессенджеров, маркетплейсов (слишком большие для одного человека)
 7. **ПРИОРИТЕТ**: Микро-SaaS, Telegram/WhatsApp боты, инструменты автоматизации, контент-генераторы, нишевые сервисы
 
-## Рынки (приоритет):
-1. Россия/СНГ (рубли, местные площадки: WB, Ozon, Авито, Telegram)
-2. Глобальный (доллары, Stripe, международные сервисы)
+## Рынки:
+Каждую идею нужно пометить полем "market":
+- "russia" — идея заточена под российский рынок (рубли, WB, Ozon, Авито, Telegram, ЮKassa)
+- "global" — идея для мирового рынка (доллары, Stripe, международные сервисы)
+- "both" — идея подходит для обоих рынков
+
+ОБЯЗАТЕЛЬНО для КАЖДОЙ идеи предоставь ДВА сценария развития в поле "marketScenarios":
+- "russia": как запустить идею ТОЛЬКО в России (каналы, аудитория, доход в рублях, преимущества)
+- "global": как запустить идею НА МИРОВОЙ РЫНОК (каналы, аудитория, доход в долларах, преимущества)
+
+Даже если идея помечена "russia" — покажи как она выглядела бы глобально, и наоборот.
 
 ## КРИТЕРИИ ОЦЕНКИ successChance (будь ЧЕСТНЫМ):
 - 80-100%: Уже доказано что работает, ниша голодная, MVP за 3 дня
@@ -63,7 +71,22 @@ const SYSTEM_PROMPT = `Ты — AI-аналитик бизнес-идей мир
   "difficulty": "easy",
   "successChance": 78,
   "estimatedRevenue": "80 000–200 000₽/мес при 60-130 подписчиках через 3 месяца",
-  "timeToLaunch": "5-7 дней до MVP"
+  "timeToLaunch": "5-7 дней до MVP",
+  "market": "russia",
+  "marketScenarios": {
+    "russia": {
+      "revenue": "80 000–200 000₽/мес через 3 месяца",
+      "channels": "Telegram-каналы селлеров WB/Ozon, чаты продавцов, посевы в профильных группах",
+      "audience": "600K+ активных продавцов WB/Ozon, 80% пишут описания вручную",
+      "advantages": "Готовые шаблоны под WB/Ozon, ЮKassa для оплаты, целевая аудитория в Telegram"
+    },
+    "global": {
+      "revenue": "$500–2000/мес через 3 месяца",
+      "channels": "Product Hunt, Reddit (r/ecommerce), Facebook Groups для Amazon/Etsy sellers",
+      "audience": "2M+ продавцов на Amazon/Etsy/Shopify, аналогичная проблема с описаниями",
+      "advantages": "Больший рынок, Stripe для оплаты, но высокая конкуренция (Jasper, Copy.ai)"
+    }
+  }
 }
 
 ### Пример 2 (Микро-SaaS):
@@ -81,7 +104,22 @@ const SYSTEM_PROMPT = `Ты — AI-аналитик бизнес-идей мир
   "difficulty": "medium",
   "successChance": 72,
   "estimatedRevenue": "60 000–150 000₽/мес при 80-200 пользователях через 3 месяца",
-  "timeToLaunch": "10-14 дней до MVP"
+  "timeToLaunch": "10-14 дней до MVP",
+  "market": "russia",
+  "marketScenarios": {
+    "russia": {
+      "revenue": "60 000–150 000₽/мес через 3 месяца",
+      "channels": "Чаты продавцов Авито, Telegram, ВК-сообщества",
+      "audience": "2M+ активных продавцов Авито, нет специализированных инструментов",
+      "advantages": "Нет конкурентов для Авито (MPSTATS только для WB), ЮKassa, русскоязычный рынок"
+    },
+    "global": {
+      "revenue": "$300–1000/мес через 3 месяца",
+      "channels": "Product Hunt, SEO, Reddit (r/Flipping, r/Entrepreneur)",
+      "audience": "Продавцы на eBay, Craigslist, Facebook Marketplace",
+      "advantages": "Огромный рынок, но есть конкуренты (Prisync, Competera) с бóльшим функционалом"
+    }
+  }
 }
 
 ### Пример 3 (Контент-инструмент):
@@ -99,13 +137,28 @@ const SYSTEM_PROMPT = `Ты — AI-аналитик бизнес-идей мир
   "difficulty": "easy",
   "successChance": 70,
   "estimatedRevenue": "50 000–120 000₽/мес при 50-80 подписчиках через 3 месяца",
-  "timeToLaunch": "6-8 дней до MVP"
+  "timeToLaunch": "6-8 дней до MVP",
+  "market": "both",
+  "marketScenarios": {
+    "russia": {
+      "revenue": "50 000–120 000₽/мес через 3 месяца",
+      "channels": "Instagram Reels, Telegram-каналы SMM-специалистов, ВК",
+      "audience": "500K+ блогеров и SMM-менеджеров в РФ",
+      "advantages": "Мало конкурентов на русском языке, аудитория активна в Telegram"
+    },
+    "global": {
+      "revenue": "$1000–3000/мес через 3 месяца",
+      "channels": "Product Hunt, TikTok, Twitter/X, Instagram, YouTube Communities",
+      "audience": "10M+ контент-мейкеров, огромный спрос на автоматизацию",
+      "advantages": "Больший рынок и готовность платить, Stripe, англоязычный SEO"
+    }
+  }
 }
 
 ## Формат ответа
 Ответ СТРОГО в формате JSON-массива. Никакого текста, markdown, комментариев — только валидный JSON.
 
-Каждая идея — объект с полями: name, emoji, description, targetAudience, monetization, startupCost, competitionLevel, trendBacking, actionPlan, claudeCodeReady, difficulty, successChance, estimatedRevenue, timeToLaunch.
+Каждая идея — объект с полями: name, emoji, description, targetAudience, monetization, startupCost, competitionLevel, trendBacking, actionPlan, claudeCodeReady, difficulty, successChance, estimatedRevenue, timeToLaunch, market, marketScenarios.
 
 Пиши всё на русском языке. Суммы в рублях (₽) для РФ-идей, в долларах ($) для глобальных.`;
 
@@ -127,7 +180,8 @@ ${trendLines}
 - Не повторяй типовые идеи — ищи НИШЕВЫЕ возможности
 - Думай как предприниматель: где деньги? кто заплатит? почему именно сейчас?
 - Разнообразие: микс из ботов, SaaS, инструментов, контент-сервисов
-- Минимум 3 идеи для российского рынка (Telegram, WB, Ozon, Авито)`;
+- Минимум 3 идеи для российского рынка (market: "russia") и минимум 3 для мирового (market: "global")
+- Для КАЖДОЙ идеи обязательно два сценария развития: russia и global`;
 
   if (input.previousIdeas && input.previousIdeas.length > 0) {
     prompt += `
@@ -153,6 +207,29 @@ function validateIdea(item: Record<string, unknown>): GeneratedIdea | null {
     ? Math.min(100, Math.max(1, Math.round(item.successChance)))
     : 50;
 
+  // Валидация market
+  const market = ["russia", "global", "both"].includes(String(item.market))
+    ? String(item.market) as "russia" | "global" | "both"
+    : "both";
+
+  // Валидация marketScenarios
+  const rawScenarios = item.marketScenarios as Record<string, Record<string, string>> | undefined;
+  const defaultScenario = { revenue: "Не оценено", channels: "Не оценено", audience: "Не оценено", advantages: "Не оценено" };
+  const marketScenarios: MarketScenarios = {
+    russia: {
+      revenue: String(rawScenarios?.russia?.revenue || defaultScenario.revenue),
+      channels: String(rawScenarios?.russia?.channels || defaultScenario.channels),
+      audience: String(rawScenarios?.russia?.audience || defaultScenario.audience),
+      advantages: String(rawScenarios?.russia?.advantages || defaultScenario.advantages),
+    },
+    global: {
+      revenue: String(rawScenarios?.global?.revenue || defaultScenario.revenue),
+      channels: String(rawScenarios?.global?.channels || defaultScenario.channels),
+      audience: String(rawScenarios?.global?.audience || defaultScenario.audience),
+      advantages: String(rawScenarios?.global?.advantages || defaultScenario.advantages),
+    },
+  };
+
   return {
     name,
     emoji: String(item.emoji || "💡"),
@@ -168,6 +245,8 @@ function validateIdea(item: Record<string, unknown>): GeneratedIdea | null {
     successChance,
     estimatedRevenue: String(item.estimatedRevenue || "Не оценено"),
     timeToLaunch: String(item.timeToLaunch || "Не оценено"),
+    market,
+    marketScenarios,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import type { IdeaDTO, ExpertAnalysis } from "@/lib/types";
+import type { IdeaDTO, ExpertAnalysis, MarketScenarios } from "@/lib/types";
 
 export default function IdeaDetailPage({
   params,
@@ -139,11 +139,11 @@ export default function IdeaDetailPage({
       </div>
 
       {/* Заголовок */}
-      <div className="mb-6 flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <span className="text-5xl">{idea.emoji}</span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{idea.name}</h1>
+      <div className="mb-6 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          <span className="text-3xl sm:text-5xl shrink-0">{idea.emoji}</span>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight break-words">{idea.name}</h1>
             <div className="mt-1 flex items-center gap-2">
               <span
                 className="rounded-full px-2.5 py-0.5 text-xs font-medium"
@@ -154,6 +154,16 @@ export default function IdeaDetailPage({
               >
                 {difficultyLabels[idea.difficulty] || idea.difficulty}
               </span>
+              {idea.market && idea.market !== "both" && (
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
+                  {idea.market === "russia" ? "🇷🇺 Россия" : "🌍 Мир"}
+                </span>
+              )}
+              {idea.market === "both" && (
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
+                  🇷🇺🌍 Оба рынка
+                </span>
+              )}
               {idea.claudeCodeReady && (
                 <span
                   className="rounded-full px-2.5 py-0.5 text-xs font-medium"
@@ -202,7 +212,7 @@ export default function IdeaDetailPage({
 
       {/* Ключевые метрики */}
       {(idea.successChance != null || idea.estimatedRevenue || idea.timeToLaunch) && (
-        <div className="mb-6 grid grid-cols-3 gap-3">
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {idea.successChance != null && (
             <div
               className="rounded-2xl p-4 text-center"
@@ -255,6 +265,11 @@ export default function IdeaDetailPage({
 
       {/* Описание — всегда видно */}
       <InfoBlock title="Описание" content={idea.description} />
+
+      {/* Сценарии по рынкам */}
+      {idea.marketScenarios && (
+        <MarketScenariosBlock scenarios={idea.marketScenarios} />
+      )}
 
       {/* Подробные данные — сворачиваемый блок */}
       <div className="mt-4">
@@ -540,6 +555,75 @@ function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MarketScenariosBlock({ scenarios }: { scenarios: MarketScenarios }) {
+  const [open, setOpen] = useState(false);
+
+  const scenarioFields = [
+    { key: "revenue" as const, label: "Доход" },
+    { key: "channels" as const, label: "Каналы" },
+    { key: "audience" as const, label: "Аудитория" },
+    { key: "advantages" as const, label: "Преимущества" },
+  ];
+
+  const allDefault = scenarioFields.every(
+    (f) => scenarios.russia[f.key] === "Не оценено" && scenarios.global[f.key] === "Не оценено"
+  );
+  if (allDefault) return null;
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full cursor-pointer items-center justify-between rounded-2xl p-4 transition-all hover:scale-[1.005]"
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🌐</span>
+          <span className="text-sm font-semibold">Сценарии по рынкам</span>
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            Россия vs Мир
+          </span>
+        </div>
+        <span className="text-sm transition-transform" style={{ transform: open ? "rotate(180deg)" : "rotate(0)" }}>
+          ▼
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 animate-fade-in">
+          {/* Россия */}
+          <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)", borderLeft: "4px solid #dc3545" }}>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xl">🇷🇺</span>
+              <h4 className="text-sm font-bold">Россия</h4>
+            </div>
+            {scenarioFields.map((f) => (
+              <div key={f.key} className="mb-2">
+                <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>{f.label}</div>
+                <div className="text-sm leading-relaxed">{scenarios.russia[f.key]}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Мир */}
+          <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)", borderLeft: "4px solid #0071e3" }}>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xl">🌍</span>
+              <h4 className="text-sm font-bold">Мировой рынок</h4>
+            </div>
+            {scenarioFields.map((f) => (
+              <div key={f.key} className="mb-2">
+                <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>{f.label}</div>
+                <div className="text-sm leading-relaxed">{scenarios.global[f.key]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       "anthropicApiKey", "newsApiKey", "wordstatToken",
       "telegramBotToken", "telegramChatId",
       "dadataApiKey", "telemetrApiKey", "vkServiceToken",
-      "googleTrendsGeo",
+      "googleTrendsGeo", "siteUrl",
     ];
 
     for (const field of stringFields) {
@@ -90,6 +90,7 @@ function maskKeys(settings: Record<string, unknown>) {
     dadataApiKey: maskString(settings.dadataApiKey as string | null),
     telemetrApiKey: maskString(settings.telemetrApiKey as string | null),
     vkServiceToken: maskString(settings.vkServiceToken as string | null),
+    siteUrl: (settings.siteUrl as string) || "",
   };
 }
 

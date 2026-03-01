@@ -2,6 +2,26 @@
 
 import { useState } from "react";
 
+// Результат проверки одного источника (от /api/health/sources)
+export interface SourceCheckDTO {
+  id: string;
+  label: string;
+  ok: boolean;
+  items: number;
+  error?: string;
+  ms: number;
+}
+
+// Полный результат проверки здоровья
+export interface HealthCheckDTO {
+  ok: boolean;
+  total: number;
+  working: number;
+  failed: number;
+  results: SourceCheckDTO[];
+  checkedAt: string;
+}
+
 interface GenerateResult {
   success: boolean;
   report?: {
@@ -10,23 +30,80 @@ interface GenerateResult {
     trendsCount: number;
   };
   error?: string;
+  healthCheck?: HealthCheckDTO;
 }
+
+// Фазы генерации: проверка источников → генерация → готово
+export type GeneratePhase = "idle" | "checking" | "generating";
+
+// Минимальный процент работающих источников (синхронизирован с бэкендом)
+const MIN_HEALTHY_PERCENT = 60;
 
 export function useGenerate() {
   const [generating, setGenerating] = useState(false);
+  const [phase, setPhase] = useState<GeneratePhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [healthCheck, setHealthCheck] = useState<HealthCheckDTO | null>(null);
 
   async function generate(): Promise<GenerateResult | null> {
     setGenerating(true);
     setError(null);
+    setHealthCheck(null);
+
     try {
+      // ═══════════════════════════════════════════
+      // ФАЗА 1: Проверяем источники данных
+      // ═══════════════════════════════════════════
+      setPhase("checking");
+
+      const healthRes = await fetch("/api/health/sources");
+      const healthData: HealthCheckDTO = await healthRes.json();
+
+      const healthyPercent =
+        healthData.total > 0
+          ? (healthData.working / healthData.total) * 100
+          : 0;
+
+      if (healthyPercent < MIN_HEALTHY_PERCENT) {
+        // Слишком мало источников — отменяем
+        setHealthCheck(healthData);
+
+        const failedNames = healthData.results
+          .filter((r) => !r.ok)
+          .map((r) => r.label)
+          .join(", ");
+
+        const msg = `Работают только ${healthData.working} из ${healthData.total} источников. Не работают: ${failedNames}`;
+        setError(msg);
+
+        // Дублируем в Telegram (POST вместо GET)
+        try {
+          await fetch("/api/health/sources", { method: "POST" });
+        } catch {
+          // Не ломаем из-за Telegram
+        }
+
+        return { success: false, error: msg, healthCheck: healthData };
+      }
+
+      // ═══════════════════════════════════════════
+      // ФАЗА 2: Генерируем отчёт
+      // ═══════════════════════════════════════════
+      setPhase("generating");
+
       const res = await fetch("/api/reports", { method: "POST" });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
         const msg = data.error || "Ошибка генерации";
         setError(msg);
-        return { success: false, error: msg };
+
+        // Если бэкенд тоже вернул healthCheck (страховка)
+        if (data.healthCheck) {
+          setHealthCheck(data.healthCheck);
+        }
+
+        return { success: false, error: msg, healthCheck: data.healthCheck };
       }
 
       return {
@@ -43,8 +120,15 @@ export function useGenerate() {
       return { success: false, error: msg };
     } finally {
       setGenerating(false);
+      setPhase("idle");
     }
   }
 
-  return { generate, generating, error };
+  // Сброс ошибки (например, когда пользователь хочет попробовать снова)
+  function resetError() {
+    setError(null);
+    setHealthCheck(null);
+  }
+
+  return { generate, generating, phase, error, healthCheck, resetError };
 }

@@ -32,6 +32,22 @@ export interface GeneratedIdea {
   successChance: number;
   estimatedRevenue: string;
   timeToLaunch: string;
+  market: "russia" | "global" | "both";
+  marketScenarios: MarketScenarios;
+}
+
+// Сценарий развития для конкретного рынка
+export interface MarketScenario {
+  revenue: string;      // Ожидаемый доход
+  channels: string;     // Каналы привлечения
+  audience: string;     // Целевая аудитория
+  advantages: string;   // Преимущества на этом рынке
+}
+
+// Два сценария: Россия и мировой рынок
+export interface MarketScenarios {
+  russia: MarketScenario;
+  global: MarketScenario;
 }
 
 // Результат генерации отчёта
@@ -114,6 +130,8 @@ export interface IdeaDTO {
   successChance: number | null;
   estimatedRevenue: string | null;
   timeToLaunch: string | null;
+  market: string;
+  marketScenarios: MarketScenarios | null;
   deepDive: string | null;
   expertAnalysis: ExpertAnalysis | null;
   rating: number | null;

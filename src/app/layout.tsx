@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import Providers from "@/components/layout/Providers";
@@ -6,6 +6,12 @@ import Providers from "@/components/layout/Providers";
 export const metadata: Metadata = {
   title: "1000 ботов — Генератор бизнес-идей",
   description: "AI-система для поиска и анализа бизнес-идей на основе трендов",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -53,6 +53,16 @@ export const IdeaCard = React.memo(function IdeaCard({
               >
                 {difficultyLabels[idea.difficulty] || idea.difficulty}
               </span>
+              {idea.market && idea.market !== "both" && (
+                <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
+                  {idea.market === "russia" ? "🇷🇺" : "🌍"}
+                </span>
+              )}
+              {idea.market === "both" && (
+                <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
+                  🇷🇺🌍
+                </span>
+              )}
               {idea.claudeCodeReady && (
                 <span
                   className="rounded-full px-2 py-0.5 text-xs font-medium"

@@ -35,32 +35,47 @@ export async function POST() {
     }
 
     const topIdeas = report.ideas;
+    const siteUrl = settings.siteUrl?.replace(/\/+$/, "") || ""; // убираем trailing slash
 
-    // Формируем сообщение
+    // Формируем сообщение в HTML-разметке (поддерживает жирное + ссылка одновременно)
     const date = report.date.toLocaleDateString("ru-RU", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
 
-    let message = `🏆 *ТОП-5 бизнес-идей*\n📅 ${date}\n\n`;
+    let message = `🏆 <b>ТОП-5 бизнес-идей</b>\n📅 ${date}\n\n`;
 
     topIdeas.forEach((idea, i) => {
-      const medal = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"][i];
+      const num = i + 1;
+      const medal = ["🥇", "🥈", "🥉", "🏅", "🏅"][i];
       const chance = idea.successChance ? `${idea.successChance}%` : "—";
       const revenue = idea.estimatedRevenue || "—";
       const time = idea.timeToLaunch || "—";
       const diff: Record<string, string> = { easy: "🟢", medium: "🟡", hard: "🔴" };
       const diffIcon = diff[idea.difficulty] || "⚪";
+      const escapedName = escapeHtml(idea.name);
+      const marketFlag: Record<string, string> = { russia: "🇷🇺", global: "🌍", both: "🇷🇺🌍" };
+      const flag = marketFlag[idea.market] || "";
 
-      message += `${medal} *${escapeMarkdown(idea.name)}* ${idea.emoji}\n`;
-      message += `${escapeMarkdown(idea.description.slice(0, 150))}${idea.description.length > 150 ? "..." : ""}\n\n`;
-      message += `📊 Шанс: *${chance}* · 💰 Доход: *${escapeMarkdown(revenue)}*\n`;
-      message += `⏱ До MVP: *${escapeMarkdown(time)}* · ${diffIcon} Сложность: ${idea.difficulty}\n`;
+      // Номер + медаль + флаг рынка + название (жирное + кликабельная ссылка)
+      if (siteUrl) {
+        message += `${medal} <b>${num}.</b> ${flag} <a href="${siteUrl}/ideas/${idea.id}"><b>${escapedName}</b></a> ${idea.emoji}\n`;
+      } else {
+        message += `${medal} <b>${num}.</b> ${flag} <b>${escapedName}</b> ${idea.emoji}\n`;
+      }
+      message += `${escapeHtml(idea.description.slice(0, 150))}${idea.description.length > 150 ? "..." : ""}\n\n`;
+      message += `📊 Шанс: <b>${chance}</b> · 💰 Доход: <b>${escapeHtml(revenue)}</b>\n`;
+      message += `⏱ До MVP: <b>${escapeHtml(time)}</b> · ${diffIcon} Сложность: ${idea.difficulty}\n`;
       message += `───────────────\n\n`;
     });
 
     message += `💡 Всего идей в отчёте: ${report.ideas.length}`;
+
+    // Ссылка на полный отчёт
+    if (siteUrl) {
+      message += `\n\n🔗 <a href="${siteUrl}/reports/${report.id}">Все идеи →</a>`;
+    }
 
     // Отправляем в Telegram
     const tgUrl = `https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`;
@@ -70,7 +85,7 @@ export async function POST() {
       body: JSON.stringify({
         chat_id: settings.telegramChatId,
         text: message,
-        parse_mode: "Markdown",
+        parse_mode: "HTML",
       }),
     });
 
@@ -96,8 +111,8 @@ export async function POST() {
   }
 }
 
-// Экранирование спецсимволов для Telegram Markdown v1
-// В v1 экранируются только: _ * ` [
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*`[]/g, "\\$&");
+// Экранирование спецсимволов для Telegram HTML
+// В HTML экранируются: < > &
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

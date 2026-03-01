@@ -9,6 +9,7 @@ import type { IdeaDTO } from "@/lib/types";
 
 type SortBy = "chance" | "revenue" | "difficulty" | "default";
 type ViewMode = "cards" | "list";
+type MarketFilter = "all" | "russia" | "global";
 
 export default function ReportDetailPage({
   params,
@@ -19,6 +20,7 @@ export default function ReportDetailPage({
   const { report, loading, error, refetch } = useReport(id);
   const [sortBy, setSortBy] = useState<SortBy>("default");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
 
   async function handleToggleFavorite(ideaId: string, isFavorite: boolean) {
     await fetch(`/api/ideas/${ideaId}`, {
@@ -31,7 +33,13 @@ export default function ReportDetailPage({
 
   const sortedIdeas = useMemo(() => {
     if (!report) return [];
-    const ideas = [...report.ideas];
+    let ideas = [...report.ideas];
+
+    // Фильтр по рынку
+    if (marketFilter !== "all") {
+      ideas = ideas.filter((i) => i.market === marketFilter || i.market === "both");
+    }
+
     if (sortBy === "chance") ideas.sort((a, b) => (b.successChance || 0) - (a.successChance || 0));
     if (sortBy === "revenue") ideas.sort((a, b) => parseRevenue(b.estimatedRevenue) - parseRevenue(a.estimatedRevenue));
     if (sortBy === "difficulty") {
@@ -39,7 +47,7 @@ export default function ReportDetailPage({
       ideas.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
     }
     return ideas;
-  }, [report, sortBy]);
+  }, [report, sortBy, marketFilter]);
 
   if (loading) {
     return (
@@ -98,22 +106,46 @@ export default function ReportDetailPage({
       {/* Панель фильтров + вид */}
       {report.ideas.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          {/* Сортировка */}
-          <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
-            {sortOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setSortBy(opt.value)}
-                className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-                style={{
-                  backgroundColor: sortBy === opt.value ? "var(--card)" : "transparent",
-                  color: sortBy === opt.value ? "var(--foreground)" : "var(--muted-foreground)",
-                  boxShadow: sortBy === opt.value ? "var(--shadow-sm)" : "none",
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {/* Сортировка */}
+            <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
+              {sortOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSortBy(opt.value)}
+                  className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: sortBy === opt.value ? "var(--card)" : "transparent",
+                    color: sortBy === opt.value ? "var(--foreground)" : "var(--muted-foreground)",
+                    boxShadow: sortBy === opt.value ? "var(--shadow-sm)" : "none",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Фильтр по рынку */}
+            <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
+              {([
+                { value: "all" as MarketFilter, label: "Все" },
+                { value: "russia" as MarketFilter, label: "🇷🇺 Россия" },
+                { value: "global" as MarketFilter, label: "🌍 Мир" },
+              ]).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setMarketFilter(opt.value)}
+                  className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: marketFilter === opt.value ? "var(--card)" : "transparent",
+                    color: marketFilter === opt.value ? "var(--foreground)" : "var(--muted-foreground)",
+                    boxShadow: marketFilter === opt.value ? "var(--shadow-sm)" : "none",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Переключатель вида */}
@@ -183,6 +215,10 @@ function IdeaListItem({ idea, onToggleFavorite }: { idea: IdeaDTO; onToggleFavor
           {idea.name}
         </Link>
         <div className="mt-0.5 flex items-center gap-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          {idea.market && idea.market !== "both" && (
+            <span>{idea.market === "russia" ? "🇷🇺" : "🌍"}</span>
+          )}
+          {idea.market === "both" && <span>🇷🇺🌍</span>}
           <span>{diffLabels[idea.difficulty] || idea.difficulty}</span>
           {idea.timeToLaunch && <span>· {idea.timeToLaunch}</span>}
         </div>

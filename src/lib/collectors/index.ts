@@ -7,6 +7,7 @@ import { ProductHuntCollector } from "./product-hunt";
 import { YandexWordstatCollector } from "./yandex-wordstat";
 import { TelemetrCollector } from "./telemetr";
 import { VkTrendsCollector } from "./vk-trends";
+import { RedditCollector } from "./reddit";
 import { translateToRussian } from "../translate";
 
 interface CollectorConfig {
@@ -54,6 +55,9 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
   if (enabled.includes("vk_trends") && config.vkServiceToken) {
     collectors.push(new VkTrendsCollector(config.vkServiceToken));
   }
+  if (enabled.includes("reddit")) {
+    collectors.push(new RedditCollector());
+  }
 
   // Запускаем параллельно, не падаем если один источник сломался
   const results = await Promise.allSettled(
@@ -94,4 +98,5 @@ export { ProductHuntCollector } from "./product-hunt";
 export { YandexWordstatCollector } from "./yandex-wordstat";
 export { TelemetrCollector } from "./telemetr";
 export { VkTrendsCollector } from "./vk-trends";
+export { RedditCollector } from "./reddit";
 export type { TrendItem } from "./base";

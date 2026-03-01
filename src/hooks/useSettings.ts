@@ -14,6 +14,7 @@ interface Settings {
   dadataApiKey: string;
   telemetrApiKey: string;
   vkServiceToken: string;
+  siteUrl: string;
 }
 
 export function useSettings() {

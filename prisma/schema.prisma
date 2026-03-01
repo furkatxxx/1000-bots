@@ -69,6 +69,8 @@ model BusinessIdea {
   successChance    Int?        // Шанс успеха 1-100 (оценка AI)
   estimatedRevenue String?     // Ожидаемый доход за 3 месяца
   timeToLaunch     String?     // Время до запуска (например "14 дней")
+  market           String      @default("both") // "russia" | "global" | "both"
+  marketScenarios  String?     // JSON: сценарии развития для России и мирового рынка
   deepDive         String?     // Развёрнутый план реализации (markdown)
   expertAnalysis   String?     // JSON: анализ от экспертного совета (4 специалиста)
   rating           Int?        // Оценка пользователя 1-5
@@ -93,4 +95,5 @@ model Settings {
   dadataApiKey      String? // API-ключ DaData для валидации ниши
   telemetrApiKey    String? // API-ключ Telemetr.io для Telegram-трендов
   vkServiceToken    String? // Сервисный токен VK для трендов ВКонтакте
+  siteUrl           String? // Публичный URL сервиса (для ссылок в Telegram)
 }
