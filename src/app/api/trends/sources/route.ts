@@ -8,7 +8,6 @@ const ALL_SOURCES = [
   { name: "github_trending", label: "GitHub Trending" },
   { name: "product_hunt", label: "Product Hunt" },
   { name: "yandex_wordstat", label: "Яндекс Вордстат" },
-  { name: "telemetr", label: "Telemetr.io (Telegram)" },
   { name: "vk_trends", label: "VK Тренды" },
 ];
 

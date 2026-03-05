@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { detectCategory, extractXmlTag } from "./base";
 import { fetchWithTimeout } from "@/lib/utils";
 
 // Reddit — парсим публичные Atom-фиды популярных подреддитов (без API-ключа)
@@ -10,17 +11,6 @@ const SUBREDDITS = [
   { name: "Entrepreneur", weight: 1.2 },
   { name: "artificial", weight: 1.1 },
 ];
-
-function detectCategory(title: string, subreddit: string): string {
-  const text = `${title} ${subreddit}`.toLowerCase();
-  if (/\bai\b|artificial|llm|gpt|machine learning|neural/.test(text)) return "ai";
-  if (/startup|launch|saas|mvp|founder/.test(text)) return "business";
-  if (/crypto|bitcoin|blockchain|web3/.test(text)) return "crypto";
-  if (/developer|code|programming|api|open.?source/.test(text)) return "devtools";
-  if (/marketing|seo|growth|ads/.test(text)) return "marketing";
-  if (/automation|workflow|productivity|tool/.test(text)) return "productivity";
-  return "tech";
-}
 
 export class RedditCollector implements TrendCollector {
   sourceId = "reddit";
@@ -75,7 +65,7 @@ export class RedditCollector implements TrendCollector {
 
     while ((match = entryRegex.exec(xml)) !== null && items.length < 8) {
       const entryXml = match[1];
-      const title = this.extractTag(entryXml, "title");
+      const title = extractXmlTag(entryXml, "title");
       const link = this.extractAtomLink(entryXml);
 
       if (title && title.length > 5) {
@@ -89,7 +79,7 @@ export class RedditCollector implements TrendCollector {
           url: link || `https://www.reddit.com/r/${subreddit}`,
           score,
           summary: null,
-          category: detectCategory(title, subreddit),
+          category: detectCategory(`${title} ${subreddit}`),
           metadata: {
             subreddit,
           },
@@ -108,11 +98,4 @@ export class RedditCollector implements TrendCollector {
     return hrefMatch ? hrefMatch[1] : null;
   }
 
-  private extractTag(xml: string, tag: string): string | null {
-    const cdataMatch = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`));
-    if (cdataMatch) return cdataMatch[1].trim();
-
-    const simpleMatch = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
-    return simpleMatch ? simpleMatch[1].trim() : null;
-  }
 }

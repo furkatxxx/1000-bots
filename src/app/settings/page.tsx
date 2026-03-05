@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { useToast } from "@/components/ui/Toast";
+import { ScheduleSection } from "@/components/settings/ScheduleSection";
 
 interface BalanceResult {
   service: string;
@@ -27,9 +28,12 @@ export default function SettingsPage() {
   const [tgBotToken, setTgBotToken] = useState("");
   const [tgChatId, setTgChatId] = useState("");
   const [dadataKey, setDadataKey] = useState("");
-  const [telemetrKey, setTelemetrKey] = useState("");
   const [vkToken, setVkToken] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
+  const [expertModel, setExpertModel] = useState("");
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("08:00");
+  const [scheduleAutoTelegram, setScheduleAutoTelegram] = useState(false);
   const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
@@ -37,7 +41,6 @@ export default function SettingsPage() {
     github_trending: true,
     product_hunt: true,
     yandex_wordstat: true,
-    telemetr: false,
     vk_trends: false,
   });
 
@@ -53,9 +56,12 @@ export default function SettingsPage() {
       setTgBotToken(settings.telegramBotToken || "");
       setTgChatId(settings.telegramChatId || "");
       setDadataKey(settings.dadataApiKey || "");
-      setTelemetrKey(settings.telemetrApiKey || "");
       setVkToken(settings.vkServiceToken || "");
       setSiteUrl(settings.siteUrl || "");
+      setExpertModel(settings.expertModel || "");
+      setScheduleEnabled(settings.scheduleEnabled ?? false);
+      setScheduleTime(settings.scheduleTime || "08:00");
+      setScheduleAutoTelegram(settings.scheduleAutoTelegram ?? false);
     }
   }, [settings]);
 
@@ -108,15 +114,16 @@ export default function SettingsPage() {
     if (dadataKey && !dadataKey.includes("••••")) {
       updates.dadataApiKey = dadataKey;
     }
-    if (telemetrKey && !telemetrKey.includes("••••")) {
-      updates.telemetrApiKey = telemetrKey;
-    }
     if (vkToken && !vkToken.includes("••••")) {
       updates.vkServiceToken = vkToken;
     }
     if (siteUrl !== undefined) {
       updates.siteUrl = siteUrl;
     }
+    updates.expertModel = expertModel;
+    updates.scheduleEnabled = scheduleEnabled;
+    updates.scheduleTime = scheduleTime;
+    updates.scheduleAutoTelegram = scheduleAutoTelegram;
 
     const ok = await save(updates);
     if (ok) {
@@ -289,22 +296,20 @@ export default function SettingsPage() {
 
         <div className="mb-4">
           <label className="mb-1.5 block text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
-            Ключ Telemetr.io
+            Модель для экспертов
           </label>
-          <input
-            type="password"
-            value={telemetrKey}
-            onChange={(e) => setTelemetrKey(e.target.value)}
-            placeholder="API-ключ от Telemetr.io"
+          <select
+            value={expertModel}
+            onChange={(e) => setExpertModel(e.target.value)}
             className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:ring-2"
             style={{ borderColor: "var(--border)", backgroundColor: "var(--background)" }}
-          />
+          >
+            <option value="">Как основная ({model === "claude-sonnet-4-6" ? "Sonnet" : "Haiku"})</option>
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (быстро, ~$0.02/идею)</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 (точнее, ~$0.15/идею)</option>
+          </select>
           <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
-            Тренды Telegram. Получить:{" "}
-            <a href="https://t.me/telemetrio_api_bot" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--primary)" }}>
-              @telemetrio_api_bot
-            </a>
-            {" "}→ /api_key
+            Цепочка из 6 экспертов вызывается для каждой идеи. Sonnet точнее, но дороже.
           </p>
         </div>
 
@@ -390,6 +395,16 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        {/* Расписание */}
+        <ScheduleSection
+          enabled={scheduleEnabled}
+          time={scheduleTime}
+          autoTelegram={scheduleAutoTelegram}
+          onEnabledChange={setScheduleEnabled}
+          onTimeChange={setScheduleTime}
+          onAutoTelegramChange={setScheduleAutoTelegram}
+        />
+
         {/* Мониторинг балансов */}
         <h2 className="mb-4 text-lg font-semibold">Мониторинг балансов</h2>
         <div className="mb-6">
@@ -458,7 +473,6 @@ export default function SettingsPage() {
             { key: "product_hunt", label: "Product Hunt", desc: "Новые стартапы и продукты каждый день" },
             { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы (глобально)" },
             { key: "news_api", label: "NewsAPI", desc: "Новости и статьи (нужен ключ)" },
-            { key: "telemetr", label: "Telemetr.io", desc: "Тренды Telegram — быстрорастущие каналы (нужен ключ)" },
             { key: "vk_trends", label: "VK Тренды", desc: "Популярные посты ВКонтакте (нужен сервисный токен)" },
           ].map((source) => (
             <label

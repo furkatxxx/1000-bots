@@ -10,8 +10,34 @@ interface TodayReportProps {
   onGenerate: () => void;
   generating: boolean;
   phase: GeneratePhase;
+  elapsed: number;
   healthCheck: HealthCheckDTO | null;
   onResetError: () => void;
+}
+
+// Этапы генерации с примерным временем (секунды)
+const GENERATION_STEPS = [
+  { label: "Собираю тренды из источников", from: 0, emoji: "📡" },
+  { label: "Анализирую и группирую тренды", from: 15, emoji: "🔍" },
+  { label: "Генерирую бизнес-идеи через AI", from: 30, emoji: "🧠" },
+  { label: "Запускаю цепочку экспертов", from: 70, emoji: "👨‍⚖️" },
+  { label: "Эксперты оценивают каждую идею", from: 120, emoji: "📊" },
+  { label: "Финализирую отчёт", from: 300, emoji: "✅" },
+];
+
+function getCurrentStep(elapsed: number) {
+  let step = GENERATION_STEPS[0];
+  for (const s of GENERATION_STEPS) {
+    if (elapsed >= s.from) step = s;
+  }
+  return step;
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m === 0) return `${s} сек`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export const TodayReport = React.memo(function TodayReport({
@@ -19,6 +45,7 @@ export const TodayReport = React.memo(function TodayReport({
   onGenerate,
   generating,
   phase,
+  elapsed,
   healthCheck,
   onResetError,
 }: TodayReportProps) {
@@ -28,9 +55,11 @@ export const TodayReport = React.memo(function TodayReport({
       <Card>
         <div className="mb-4 flex justify-center">
           <span
-            className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-t-transparent"
+            className="inline-block h-12 w-12 animate-spin rounded-full border-4"
             style={{
-              borderColor: "var(--warning)",
+              borderRightColor: "var(--warning)",
+              borderBottomColor: "var(--warning)",
+              borderLeftColor: "var(--warning)",
               borderTopColor: "transparent",
             }}
           />
@@ -44,24 +73,81 @@ export const TodayReport = React.memo(function TodayReport({
     );
   }
 
-  // ─── Фаза: генерируем отчёт ───
+  // ─── Фаза: генерируем отчёт (с прогрессом) ───
   if (phase === "generating") {
+    const step = getCurrentStep(elapsed);
+    // Прогресс-бар: ~5 минут = 300 секунд
+    const progress = Math.min((elapsed / 330) * 100, 95);
+
     return (
       <Card>
         <div className="mb-4 flex justify-center">
           <span
-            className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-t-transparent"
+            className="inline-block h-12 w-12 animate-spin rounded-full border-4"
             style={{
-              borderColor: "var(--primary)",
+              borderRightColor: "var(--primary)",
+              borderBottomColor: "var(--primary)",
+              borderLeftColor: "var(--primary)",
               borderTopColor: "transparent",
             }}
           />
         </div>
         <h3 className="mb-2 text-lg font-semibold">Генерирую отчёт...</h3>
+
+        {/* Текущий этап */}
+        <div
+          className="mb-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium"
+          style={{ backgroundColor: "var(--muted)" }}
+        >
+          <span>{step.emoji}</span>
+          <span>{step.label}</span>
+        </div>
+
+        {/* Прогресс-бар */}
+        <div
+          className="mx-auto mb-3 h-2 w-full max-w-xs overflow-hidden rounded-full"
+          style={{ backgroundColor: "var(--muted)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-1000"
+            style={{
+              width: `${progress}%`,
+              backgroundColor: "var(--primary)",
+            }}
+          />
+        </div>
+
+        {/* Таймер */}
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Источники в порядке ✅ Изучаю тренды и создаю бизнес-идеи. Это
-          займёт 15-30 секунд.
+          Прошло {formatTime(elapsed)} · обычно занимает ~5 минут
         </p>
+
+        {/* Подэтапы */}
+        <div className="mt-4 space-y-1">
+          {GENERATION_STEPS.map((s, i) => {
+            const isDone = elapsed >= (GENERATION_STEPS[i + 1]?.from ?? Infinity);
+            const isCurrent = s === step && !isDone;
+            return (
+              <div
+                key={s.label}
+                className="flex items-center gap-2 text-xs"
+                style={{
+                  color: isDone
+                    ? "var(--success)"
+                    : isCurrent
+                    ? "var(--foreground)"
+                    : "var(--muted-foreground)",
+                  opacity: isDone || isCurrent ? 1 : 0.5,
+                }}
+              >
+                <span>{isDone ? "✅" : isCurrent ? "⏳" : "○"}</span>
+                <span className={isCurrent ? "font-medium" : ""}>
+                  {s.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </Card>
     );
   }
@@ -177,16 +263,19 @@ export const TodayReport = React.memo(function TodayReport({
       <Card>
         <div className="mb-4 flex justify-center">
           <span
-            className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-t-transparent"
+            className="inline-block h-12 w-12 animate-spin rounded-full border-4"
             style={{
-              borderColor: "var(--primary)",
+              borderRightColor: "var(--primary)",
+              borderBottomColor: "var(--primary)",
+              borderLeftColor: "var(--primary)",
               borderTopColor: "transparent",
             }}
           />
         </div>
         <h3 className="mb-2 text-lg font-semibold">Генерирую отчёт...</h3>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Изучаю тренды и создаю бизнес-идеи. Это займёт 15-30 секунд.
+          Идёт генерация. Обычно занимает ~5 минут.
+          Обновите страницу через пару минут.
         </p>
       </Card>
     );

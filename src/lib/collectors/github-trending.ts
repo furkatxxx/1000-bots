@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { detectCategory } from "./base";
 import { fetchWithTimeout } from "@/lib/utils";
 
 // GitHub Trending — через Search API (бесплатно, 10 запросов/мин без токена)
@@ -20,17 +21,6 @@ interface GitHubSearchResponse {
   items: GitHubRepo[];
 }
 
-function detectCategory(repo: GitHubRepo): string {
-  const text = `${repo.name} ${repo.description || ""} ${repo.topics.join(" ")}`.toLowerCase();
-  if (/\bai\b|llm|gpt|claude|machine.?learning|openai|anthropic|transformer/.test(text)) return "ai";
-  if (/saas|startup|business|monetiz/.test(text)) return "saas";
-  if (/bot|telegram|discord|slack|chatbot/.test(text)) return "bot";
-  if (/web|react|next|vue|angular|frontend/.test(text)) return "webdev";
-  if (/api|backend|server|database/.test(text)) return "backend";
-  if (/automat|scrape|crawler|pipeline/.test(text)) return "automation";
-  if (/devops|deploy|docker|kubernetes/.test(text)) return "devops";
-  return "opensource";
-}
 
 export class GitHubTrendingCollector implements TrendCollector {
   sourceId = "github_trending";
@@ -68,7 +58,7 @@ export class GitHubTrendingCollector implements TrendCollector {
         url: repo.html_url,
         score: Math.round((repo.stargazers_count / maxStars) * 100),
         summary: repo.description,
-        category: detectCategory(repo),
+        category: detectCategory(`${repo.name} ${repo.description || ""} ${repo.topics.join(" ")}`),
         metadata: {
           stars: repo.stargazers_count,
           forks: repo.forks_count,

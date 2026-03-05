@@ -120,7 +120,11 @@ model Settings {
   telegramBotToken  String? // Токен Telegram-бота
   telegramChatId    String? // Chat ID для уведомлений
   dadataApiKey      String? // API-ключ DaData для валидации ниши
-  telemetrApiKey    String? // API-ключ Telemetr.io для Telegram-трендов
-  vkServiceToken    String? // Сервисный токен VK для трендов ВКонтакте
+vkServiceToken    String? // Сервисный токен VK для трендов ВКонтакте
   siteUrl           String? // Публичный URL сервиса (для ссылок в Telegram)
+  // Этап 8: цепочка экспертов + автоматизация
+  expertModel          String?                    // Отдельная модель для экспертов (#42)
+  scheduleEnabled      Boolean @default(false)    // Включить автогенерацию по расписанию (#40)
+  scheduleTime         String  @default("08:00")  // Время генерации HH:MM (#40)
+  scheduleAutoTelegram Boolean @default(false)    // Автоотправка в Telegram после генерации (#40)
 }

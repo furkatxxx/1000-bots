@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fetchWithTimeout } from "@/lib/utils";
+import type { ExpertAnalysis } from "@/lib/types";
 
-// POST /api/telegram/send-top — отправить ТОП-5 идей в Telegram
-export async function POST() {
+// POST /api/telegram/send-top — отправить ТОП идей в Telegram
+// ?force=true — отправить ТОП-5 по шансу (старое поведение, без фильтра по экспертам)
+export async function POST(request: NextRequest) {
   try {
     const settings = await prisma.settings.findUnique({ where: { id: "main" } });
 
@@ -14,15 +16,15 @@ export async function POST() {
       );
     }
 
-    // Берём последний завершённый отчёт с ТОП-5 по шансу успеха
+    const force = request.nextUrl.searchParams.get("force") === "true";
+
+    // Берём последний завершённый отчёт со всеми идеями
     const report = await prisma.dailyReport.findFirst({
       where: { status: "complete" },
       orderBy: { date: "desc" },
       include: {
         ideas: {
           where: { isArchived: false },
-          orderBy: { successChance: "desc" },
-          take: 5,
         },
       },
     });
@@ -34,45 +36,91 @@ export async function POST() {
       );
     }
 
-    const topIdeas = report.ideas;
-    const siteUrl = settings.siteUrl?.replace(/\/+$/, "") || ""; // убираем trailing slash
+    // Умная фильтрация: только идеи с экспертной оценкой ≥ 7
+    let topIdeas;
+    if (force) {
+      // Старое поведение: ТОП-5 по шансу
+      topIdeas = [...report.ideas]
+        .sort((a, b) => (b.successChance || 0) - (a.successChance || 0))
+        .slice(0, 5);
+    } else {
+      // Новое: фильтруем по экспертной оценке
+      const withExperts = report.ideas
+        .map((idea) => {
+          let expert: ExpertAnalysis | null = null;
+          if (idea.expertAnalysis) {
+            try { expert = JSON.parse(idea.expertAnalysis as string) as ExpertAnalysis; } catch {}
+          }
+          return { ...idea, _expert: expert };
+        })
+        .filter((idea) => idea._expert && idea._expert.finalScore >= 7)
+        .sort((a, b) => (b._expert?.finalScore || 0) - (a._expert?.finalScore || 0))
+        .slice(0, 5);
 
-    // Формируем сообщение в HTML-разметке (поддерживает жирное + ссылка одновременно)
+      if (withExperts.length === 0) {
+        return NextResponse.json({
+          success: true,
+          sentCount: 0,
+          message: "Нет идей с экспертной оценкой ≥ 7/10. Добавьте ?force=true для отправки ТОП-5 без фильтра.",
+        });
+      }
+      topIdeas = withExperts;
+    }
+
+    const siteUrl = settings.siteUrl?.replace(/\/+$/, "") || "";
+
+    // Формируем сообщение
     const date = report.date.toLocaleDateString("ru-RU", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
 
-    let message = `🏆 <b>ТОП-5 бизнес-идей</b>\n📅 ${date}\n\n`;
+    const title = force ? "ТОП-5 бизнес-идей" : `ТОП идей (оценка 7+/10)`;
+    let message = `🏆 <b>${title}</b>\n📅 ${date}\n\n`;
 
     topIdeas.forEach((idea, i) => {
       const num = i + 1;
-      const medal = ["🥇", "🥈", "🥉", "🏅", "🏅"][i];
-      const chance = idea.successChance ? `${idea.successChance}%` : "—";
-      const revenue = idea.estimatedRevenue || "—";
-      const time = idea.timeToLaunch || "—";
-      const diff: Record<string, string> = { easy: "🟢", medium: "🟡", hard: "🔴" };
-      const diffIcon = diff[idea.difficulty] || "⚪";
+      const medal = ["🥇", "🥈", "🥉", "🏅", "🏅"][i] || "🏅";
       const escapedName = escapeHtml(idea.name);
       const marketFlag: Record<string, string> = { russia: "🇷🇺", global: "🌍", both: "🇷🇺🌍" };
       const flag = marketFlag[idea.market] || "";
+      const diff: Record<string, string> = { easy: "🟢", medium: "🟡", hard: "🔴" };
+      const diffIcon = diff[idea.difficulty] || "⚪";
 
-      // Номер + медаль + флаг рынка + название (жирное + кликабельная ссылка)
+      // Экспертная оценка или шанс успеха
+      let expertInfo: ExpertAnalysis | null = null;
+      if ("_expert" in idea && idea._expert) {
+        expertInfo = idea._expert as ExpertAnalysis;
+      } else if (idea.expertAnalysis) {
+        try { expertInfo = JSON.parse(idea.expertAnalysis as string) as ExpertAnalysis; } catch {}
+      }
+
+      // Название
       if (siteUrl) {
         message += `${medal} <b>${num}.</b> ${flag} <a href="${siteUrl}/ideas/${idea.id}"><b>${escapedName}</b></a> ${idea.emoji}\n`;
       } else {
         message += `${medal} <b>${num}.</b> ${flag} <b>${escapedName}</b> ${idea.emoji}\n`;
       }
       message += `${escapeHtml(idea.description.slice(0, 150))}${idea.description.length > 150 ? "..." : ""}\n\n`;
-      message += `📊 Шанс: <b>${chance}</b> · 💰 Доход: <b>${escapeHtml(revenue)}</b>\n`;
-      message += `⏱ До MVP: <b>${escapeHtml(time)}</b> · ${diffIcon} Сложность: ${idea.difficulty}\n`;
+
+      // Оценка
+      if (expertInfo) {
+        const verdictLabels: Record<string, string> = { launch: "✅ Запускать", pivot: "🔄 Доработать", reject: "❌ Отказаться" };
+        const verdict = verdictLabels[expertInfo.finalVerdict] || expertInfo.finalVerdict;
+        message += `🎯 Эксперты: <b>${expertInfo.finalScore}/10</b> · ${verdict}\n`;
+      } else {
+        const chance = idea.successChance ? `${idea.successChance}%` : "—";
+        message += `📊 Шанс: <b>${chance}</b>\n`;
+      }
+
+      const revenue = idea.estimatedRevenue || "—";
+      const time = idea.timeToLaunch || "—";
+      message += `💰 Доход: <b>${escapeHtml(revenue)}</b> · ⏱ MVP: <b>${escapeHtml(time)}</b> · ${diffIcon}\n`;
       message += `───────────────\n\n`;
     });
 
     message += `💡 Всего идей в отчёте: ${report.ideas.length}`;
-
-    // Ссылка на полный отчёт
     if (siteUrl) {
       message += `\n\n🔗 <a href="${siteUrl}/reports/${report.id}">Все идеи →</a>`;
     }
@@ -112,7 +160,6 @@ export async function POST() {
 }
 
 // Экранирование спецсимволов для Telegram HTML
-// В HTML экранируются: < > &
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

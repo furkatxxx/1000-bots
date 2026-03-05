@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
-import { generateIdeas } from "@/lib/ai-brain";
+import { generateIdeas, filterTrends, semanticDedup } from "@/lib/ai-brain";
+import { expertChain } from "@/lib/expert-chain";
+import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
   isHealthyEnough,
   SOURCE_LABELS,
 } from "@/lib/health-check";
+
+export const maxDuration = 300;
 
 // GET /api/reports — список всех отчётов
 export async function GET() {
@@ -40,25 +44,27 @@ export async function GET() {
   }
 }
 
-// POST /api/reports — сгенерировать новый отчёт
+// POST /api/reports — генерация отчёта (упрощённый pipeline)
 export async function POST() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Проверяем: не генерируется ли уже отчёт?
   const existing = await prisma.dailyReport.findUnique({ where: { date: today } });
   if (existing?.status === "generating") {
-    return NextResponse.json(
-      { success: false, error: "Отчёт уже генерируется. Подождите завершения." },
-      { status: 409 }
-    );
+    const stuckThreshold = 10 * 60 * 1000;
+    const createdTime = existing.generatedAt?.getTime() || existing.createdAt.getTime();
+    const isStuck = Date.now() - createdTime > stuckThreshold;
+
+    if (!isStuck) {
+      return NextResponse.json(
+        { success: false, error: "Отчёт уже генерируется. Подождите (~5-8 минут)." },
+        { status: 409 }
+      );
+    }
+    console.warn("[Reports] Генерация зависла, перезапуск...");
   }
 
-  // Загружаем настройки
-  const settings = await prisma.settings.findUnique({
-    where: { id: "main" },
-  });
-
+  const settings = await prisma.settings.findUnique({ where: { id: "main" } });
   if (!settings?.anthropicApiKey) {
     return NextResponse.json(
       { success: false, error: "Не указан API-ключ Anthropic. Добавьте его в настройках." },
@@ -66,47 +72,34 @@ export async function POST() {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ШАГ 0: ПРОВЕРКА ИСТОЧНИКОВ ПЕРЕД ГЕНЕРАЦИЕЙ
-  // Сначала проверяем что источники работают — чтобы не тратить
-  // деньги на AI если данных будет мало
-  // ═══════════════════════════════════════════════════════════
+  // ШАГ 0: Проверка здоровья источников
   const healthResult = await runHealthCheck({
     googleTrendsGeo: settings.googleTrendsGeo || "US",
     newsApiKey: settings.newsApiKey,
     vkServiceToken: settings.vkServiceToken,
     wordstatToken: settings.wordstatToken,
-    telemetrApiKey: settings.telemetrApiKey,
   });
 
   if (!isHealthyEnough(healthResult)) {
-    // Недостаточно источников — отменяем генерацию
     const failedNames = healthResult.results
       .filter((r) => !r.ok)
       .map((r) => r.label)
       .join(", ");
 
-    // Уведомляем в Telegram
     if (settings.telegramBotToken && settings.telegramChatId) {
-      await sendHealthTelegramAlert(
-        settings.telegramBotToken,
-        settings.telegramChatId,
-        healthResult,
-        "pre-report"
-      );
+      await sendHealthTelegramAlert(settings.telegramBotToken, settings.telegramChatId, healthResult, "pre-report");
     }
 
     return NextResponse.json(
       {
         success: false,
-        error: `Генерация отменена: работают только ${healthResult.working} из ${healthResult.total} источников. Не работают: ${failedNames}. Исправьте проблемы и попробуйте снова.`,
+        error: `Генерация отменена: работают ${healthResult.working} из ${healthResult.total} источников. Не работают: ${failedNames}.`,
         healthCheck: healthResult,
       },
       { status: 503 }
     );
   }
 
-  // Источники в порядке — начинаем генерацию
   const report = await prisma.dailyReport.upsert({
     where: { date: today },
     update: { status: "generating", error: null },
@@ -114,34 +107,32 @@ export async function POST() {
   });
 
   try {
-    const sources = await prisma.trendSource.findMany({
-      where: { enabled: true },
-    });
+    const sources = await prisma.trendSource.findMany({ where: { enabled: true } });
     const enabledSources = sources.map((s) => s.name);
 
-    // 1. Собираем тренды
+    // ═══════════════════════════════════════════════════
+    // ШАГ 1: СБОР ТРЕНДОВ
+    // ═══════════════════════════════════════════════════
+    console.log("[Gen] Шаг 1: Сбор трендов...");
     const trendItems = await collectAll({
       newsApiKey: settings.newsApiKey || undefined,
       wordstatToken: settings.wordstatToken || undefined,
       googleTrendsGeo: settings.googleTrendsGeo || "US",
-      telemetrApiKey: settings.telemetrApiKey || undefined,
       vkServiceToken: settings.vkServiceToken || undefined,
       enabledSources: enabledSources.length > 0 ? enabledSources : undefined,
     });
 
     if (trendItems.length === 0) {
-      throw new Error("Не удалось собрать тренды ни из одного источника. Проверьте настройки и подключение к интернету.");
+      throw new Error("Не удалось собрать тренды ни из одного источника.");
     }
 
-    // Проверяем какие источники не дали данных (информационно, в лог)
     const activeSourceIds = new Set(trendItems.map((t) => t.sourceId));
     const silentSources = enabledSources.filter((s) => !activeSourceIds.has(s));
     if (silentSources.length > 0) {
-      const failedNames = silentSources.map((s) => SOURCE_LABELS[s] || s).join(", ");
-      console.warn(`[API /reports] Источники не дали данных при сборе: ${failedNames}`);
+      console.warn(`[Gen] Источники без данных: ${silentSources.map((s) => SOURCE_LABELS[s] || s).join(", ")}`);
     }
 
-    // 2. Сохраняем тренды
+    // Сохраняем тренды
     await prisma.trendData.createMany({
       data: trendItems.map((item) => ({
         sourceId: item.sourceId,
@@ -154,37 +145,74 @@ export async function POST() {
       })),
     });
 
-    // 3. Дедупликация: прошлые идеи
+    // ═══════════════════════════════════════════════════
+    // ШАГ 2: ФИЛЬТРАЦИЯ МУСОРНЫХ ТРЕНДОВ
+    // ═══════════════════════════════════════════════════
+    const trendData = trendItems.map((t) => ({
+      title: t.title,
+      score: t.score,
+      source: t.sourceId,
+      category: t.category || undefined,
+    }));
+
+    const filtered = filterTrends(trendData);
+    console.log(`[Gen] Шаг 2: Фильтр трендов: ${trendData.length} → ${filtered.length} (убрано ${trendData.length - filtered.length} мусорных)`);
+
+    if (filtered.length < 5) {
+      console.warn(`[Gen] Мало трендов после фильтра (${filtered.length}), используем все`);
+    }
+    const trendsForAI = filtered.length >= 5 ? filtered : trendData;
+
+    // Дедупликация: прошлые идеи
     const recentIdeas = await prisma.businessIdea.findMany({
-      where: {
-        report: {
-          id: { not: report.id },
-          status: "complete",
-        },
-      },
+      where: { report: { id: { not: report.id }, status: "complete" } },
       select: { name: true },
       orderBy: { createdAt: "desc" },
       take: 30,
     });
     const previousIdeas = recentIdeas.map((i) => i.name);
 
-    // 4. Генерируем идеи через AI
-    const result = await generateIdeas({
-      trends: trendItems.map((t) => ({
-        title: t.title,
-        score: t.score,
-        source: t.sourceId,
-        category: t.category || undefined,
-      })),
-      maxIdeas: settings.maxIdeasPerReport || 10,
-      model: settings.preferredModel || "claude-haiku-4-5-20251001",
+    // Модели: Sonnet для генерации, Haiku для экспертов
+    const generationModel = "claude-sonnet-4-6";
+    const expertModel = settings.expertModel || "claude-haiku-4-5-20251001";
+    let totalTokensIn = 0;
+    let totalTokensOut = 0;
+
+    // ═══════════════════════════════════════════════════
+    // ШАГ 3: ГЕНЕРАЦИЯ 10 ИДЕЙ (Sonnet, один проход)
+    // ═══════════════════════════════════════════════════
+    console.log(`[Gen] Шаг 3: Генерация 10 идей (${generationModel})...`);
+    const genResult = await generateIdeas({
+      trends: trendsForAI,
+      maxIdeas: 10,
+      model: generationModel,
       apiKey: settings.anthropicApiKey,
       previousIdeas,
     });
+    totalTokensIn += genResult.tokensIn;
+    totalTokensOut += genResult.tokensOut;
+    console.log(`[Gen] Сгенерировано: ${genResult.ideas.length} идей`);
 
-    // 5. Сохраняем идеи пакетно
+    // ═══════════════════════════════════════════════════
+    // ШАГ 4: СЕМАНТИЧЕСКАЯ ДЕДУПЛИКАЦИЯ
+    // ═══════════════════════════════════════════════════
+    console.log("[Gen] Шаг 4: Семантическая дедупликация...");
+    const dedupResult = await semanticDedup({
+      ideas: genResult.ideas,
+      apiKey: settings.anthropicApiKey,
+      model: expertModel,
+    });
+    totalTokensIn += dedupResult.tokensIn;
+    totalTokensOut += dedupResult.tokensOut;
+    const finalIdeas = dedupResult.unique;
+    console.log(`[Gen] После дедупликации: ${finalIdeas.length} уникальных идей`);
+
+    // ═══════════════════════════════════════════════════
+    // ШАГ 5: СОХРАНЕНИЕ В БД
+    // ═══════════════════════════════════════════════════
+    await prisma.businessIdea.deleteMany({ where: { reportId: report.id } });
     await prisma.businessIdea.createMany({
-      data: result.ideas.map((idea) => ({
+      data: finalIdeas.map((idea) => ({
         reportId: report.id,
         name: idea.name,
         emoji: idea.emoji,
@@ -205,16 +233,82 @@ export async function POST() {
       })),
     });
 
-    // 6. Обновляем отчёт
+    // ═══════════════════════════════════════════════════
+    // ШАГ 6: ЦЕПОЧКА ЭКСПЕРТОВ (Haiku, 6 вызовов на идею)
+    // ═══════════════════════════════════════════════════
+    const savedIdeas = await prisma.businessIdea.findMany({
+      where: { reportId: report.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    console.log(`[Gen] Шаг 6: Цепочка экспертов для ${savedIdeas.length} идей (${expertModel})`);
+
+    for (let i = 0; i < savedIdeas.length; i++) {
+      const idea = savedIdeas[i];
+      console.log(`[Gen] Эксперты ${i + 1}/${savedIdeas.length}: ${idea.name}`);
+
+      try {
+        const validationData = await collectValidationData({
+          ideaName: idea.name,
+          ideaDescription: idea.description,
+          targetAudience: idea.targetAudience,
+          wordstatToken: settings.wordstatToken || undefined,
+          dadataApiKey: settings.dadataApiKey || undefined,
+        });
+        const validationContext = formatValidationForPrompt(validationData);
+
+        const expertResult = await expertChain({
+          idea: {
+            name: idea.name,
+            description: idea.description,
+            targetAudience: idea.targetAudience,
+            monetization: idea.monetization,
+            startupCost: idea.startupCost,
+            competitionLevel: idea.competitionLevel,
+            actionPlan: idea.actionPlan,
+            estimatedRevenue: idea.estimatedRevenue,
+            trendBacking: idea.trendBacking,
+          },
+          apiKey: settings.anthropicApiKey,
+          model: expertModel,
+          validationContext: validationContext || undefined,
+        });
+
+        await prisma.businessIdea.update({
+          where: { id: idea.id },
+          data: { expertAnalysis: JSON.stringify(expertResult.analysis) },
+        });
+
+        totalTokensIn += expertResult.tokensIn;
+        totalTokensOut += expertResult.tokensOut;
+      } catch (error) {
+        console.error(`[Gen] Ошибка экспертов для "${idea.name}":`, error);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ШАГ 7: ФИНАЛИЗАЦИЯ
+    // ═══════════════════════════════════════════════════
+    const completedIdeas = await prisma.businessIdea.findMany({
+      where: { reportId: report.id },
+    });
+    const withExperts = completedIdeas.filter((i) => i.expertAnalysis);
+
+    console.log(`[Gen] ═══ ИТОГ ═══`);
+    console.log(`[Gen] Тренды: ${trendItems.length} собрано, ${trendsForAI.length} после фильтра`);
+    console.log(`[Gen] Идеи: ${genResult.ideas.length} → ${finalIdeas.length} (после дедупа)`);
+    console.log(`[Gen] С экспертами: ${withExperts.length}`);
+    console.log(`[Gen] Токены: ${totalTokensIn} in, ${totalTokensOut} out`);
+
     const updated = await prisma.dailyReport.update({
       where: { id: report.id },
       data: {
         status: "complete",
         trendsCount: trendItems.length,
-        ideasCount: result.ideas.length,
-        aiModel: result.model,
-        aiTokensIn: result.tokensIn,
-        aiTokensOut: result.tokensOut,
+        ideasCount: completedIdeas.length,
+        aiModel: generationModel,
+        aiTokensIn: totalTokensIn,
+        aiTokensOut: totalTokensOut,
         generatedAt: new Date(),
       },
     });
@@ -228,6 +322,13 @@ export async function POST() {
         trendsCount: updated.trendsCount,
         ideasCount: updated.ideasCount,
       },
+      pipeline: {
+        trends: trendItems.length,
+        afterFilter: trendsForAI.length,
+        generated: genResult.ideas.length,
+        afterDedup: finalIdeas.length,
+        withExperts: withExperts.length,
+      },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка";
@@ -237,10 +338,10 @@ export async function POST() {
         data: { status: "failed", error: errorMessage },
       });
     } catch (dbError) {
-      console.error("[API /reports] Ошибка обновления статуса:", dbError);
+      console.error("[Gen] Ошибка обновления статуса:", dbError);
     }
 
-    console.error("[API /reports] Ошибка генерации:", error);
+    console.error("[Gen] Ошибка генерации:", error);
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

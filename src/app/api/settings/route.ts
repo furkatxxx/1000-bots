@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 
 const ALLOWED_MODELS = [
   "claude-haiku-4-5-20251001",
-  "claude-sonnet-4-20250514",
+  "claude-sonnet-4-6",
 ];
 
 // GET /api/settings — получить настройки
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const stringFields = [
       "anthropicApiKey", "newsApiKey", "wordstatToken",
       "telegramBotToken", "telegramChatId",
-      "dadataApiKey", "telemetrApiKey", "vkServiceToken",
+      "dadataApiKey", "vkServiceToken",
       "googleTrendsGeo", "siteUrl",
     ];
 
@@ -63,6 +63,24 @@ export async function POST(request: Request) {
       if (ALLOWED_MODELS.includes(body.preferredModel)) {
         data.preferredModel = body.preferredModel;
       }
+    }
+
+    // Этап 8: модель для экспертов
+    if (typeof body.expertModel === "string") {
+      if (body.expertModel === "" || ALLOWED_MODELS.includes(body.expertModel)) {
+        data.expertModel = body.expertModel || null;
+      }
+    }
+
+    // Этап 8: расписание
+    if (typeof body.scheduleEnabled === "boolean") {
+      data.scheduleEnabled = body.scheduleEnabled;
+    }
+    if (typeof body.scheduleTime === "string" && /^\d{2}:\d{2}$/.test(body.scheduleTime)) {
+      data.scheduleTime = body.scheduleTime;
+    }
+    if (typeof body.scheduleAutoTelegram === "boolean") {
+      data.scheduleAutoTelegram = body.scheduleAutoTelegram;
     }
 
     const settings = await prisma.settings.upsert({
@@ -88,9 +106,13 @@ function maskKeys(settings: Record<string, unknown>) {
     telegramBotToken: maskString(settings.telegramBotToken as string | null),
     telegramChatId: settings.telegramChatId || "",
     dadataApiKey: maskString(settings.dadataApiKey as string | null),
-    telemetrApiKey: maskString(settings.telemetrApiKey as string | null),
     vkServiceToken: maskString(settings.vkServiceToken as string | null),
     siteUrl: (settings.siteUrl as string) || "",
+    // Этап 8
+    expertModel: (settings.expertModel as string) || "",
+    scheduleEnabled: settings.scheduleEnabled ?? false,
+    scheduleTime: (settings.scheduleTime as string) || "08:00",
+    scheduleAutoTelegram: settings.scheduleAutoTelegram ?? false,
   };
 }
 

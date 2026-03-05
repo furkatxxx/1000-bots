@@ -12,7 +12,7 @@ import { useReport } from "@/hooks/useReport";
 
 export default function DashboardPage() {
   const { reports, favoritesCount, loading: loadingReports, refetch: refetchReports } = useReports();
-  const { generate, generating, phase, healthCheck, resetError } = useGenerate();
+  const { generate, generating, phase, elapsed, healthCheck, resetError } = useGenerate();
   const { showToast } = useToast();
   const [sendingTg, setSendingTg] = useState(false);
 
@@ -77,6 +77,7 @@ export default function DashboardPage() {
           onGenerate={handleGenerate}
           generating={generating}
           phase={phase}
+          elapsed={elapsed}
           healthCheck={healthCheck}
           onResetError={resetError}
         />
@@ -128,15 +129,16 @@ function TopIdeas({ reportId }: { reportId: string }) {
 
   if (!report || report.ideas.length === 0) return null;
 
-  // Умная сортировка: шанс успеха * коэффициент сложности
+  // Умная сортировка: экспертная оценка (если есть) или шанс успеха * коэффициент сложности
   const diffWeight: Record<string, number> = { easy: 1.3, medium: 1.0, hard: 0.7 };
   const topIdeas = [...report.ideas]
     .filter((idea) => !idea.isArchived)
     .filter((idea) => marketFilter === "all" || idea.market === marketFilter || idea.market === "both")
-    .map((idea) => ({
-      ...idea,
-      _rank: (idea.successChance || 0) * (diffWeight[idea.difficulty] || 1),
-    }))
+    .map((idea) => {
+      const expertScore = idea.expertAnalysis?.finalScore;
+      const baseScore = expertScore != null ? expertScore * 10 : (idea.successChance || 0);
+      return { ...idea, _rank: baseScore * (diffWeight[idea.difficulty] || 1) };
+    })
     .sort((a, b) => b._rank - a._rank)
     .slice(0, 4);
 
@@ -154,7 +156,7 @@ function TopIdeas({ reportId }: { reportId: string }) {
         <div>
           <h2 className="text-xl font-semibold">🏆 Лучшие идеи</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
-            Отсортированы по шансу успеха и скорости запуска
+            Отсортированы по экспертной оценке и скорости запуска
           </p>
         </div>
         <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>

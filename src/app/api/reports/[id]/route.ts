@@ -57,6 +57,7 @@ export async function GET(
           timeToLaunch: idea.timeToLaunch,
           market: idea.market,
           marketScenarios: idea.marketScenarios ? (() => { try { return JSON.parse(idea.marketScenarios); } catch { return null; } })() : null,
+          expertAnalysis: idea.expertAnalysis ? (() => { try { return JSON.parse(idea.expertAnalysis); } catch { return null; } })() : null,
           rating: idea.rating,
           isFavorite: idea.isFavorite,
           isArchived: idea.isArchived,

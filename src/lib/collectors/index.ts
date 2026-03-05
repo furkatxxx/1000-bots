@@ -5,7 +5,7 @@ import { NewsAPICollector } from "./news-api";
 import { GitHubTrendingCollector } from "./github-trending";
 import { ProductHuntCollector } from "./product-hunt";
 import { YandexWordstatCollector } from "./yandex-wordstat";
-import { TelemetrCollector } from "./telemetr";
+
 import { VkTrendsCollector } from "./vk-trends";
 import { RedditCollector } from "./reddit";
 import { translateToRussian } from "../translate";
@@ -14,7 +14,7 @@ interface CollectorConfig {
   newsApiKey?: string;
   wordstatToken?: string;
   googleTrendsGeo?: string;
-  telemetrApiKey?: string;
+
   vkServiceToken?: string;
   enabledSources?: string[];
 }
@@ -49,10 +49,7 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
   if (enabled.includes("yandex_wordstat") && config.wordstatToken) {
     collectors.push(new YandexWordstatCollector(config.wordstatToken));
   }
-  if (enabled.includes("telemetr") && config.telemetrApiKey) {
-    collectors.push(new TelemetrCollector(config.telemetrApiKey));
-  }
-  if (enabled.includes("vk_trends") && config.vkServiceToken) {
+if (enabled.includes("vk_trends") && config.vkServiceToken) {
     collectors.push(new VkTrendsCollector(config.vkServiceToken));
   }
   if (enabled.includes("reddit")) {
@@ -96,7 +93,7 @@ export { NewsAPICollector } from "./news-api";
 export { GitHubTrendingCollector } from "./github-trending";
 export { ProductHuntCollector } from "./product-hunt";
 export { YandexWordstatCollector } from "./yandex-wordstat";
-export { TelemetrCollector } from "./telemetr";
+
 export { VkTrendsCollector } from "./vk-trends";
 export { RedditCollector } from "./reddit";
 export type { TrendItem } from "./base";

@@ -28,7 +28,7 @@ export async function validateDemand(
       },
       body: JSON.stringify({
         phrase: keyword,
-        regions: [], // вся Россия
+        regions: [225], // 225 = вся Россия
         devices: ["all"],
       }),
     });
@@ -39,7 +39,11 @@ export async function validateDemand(
     }
 
     const topData = await topRes.json();
-    const queries: { text: string; count: number }[] = topData.queries || [];
+    const rawItems = topData.topRequests || topData.queries || [];
+    const queries: { text: string; count: number }[] = rawItems.map((q: { phrase?: string; text?: string; count: number }) => ({
+      text: q.phrase || q.text || "",
+      count: q.count,
+    }));
     const monthlySearches = queries.length > 0 ? queries[0].count : 0;
 
     // 2. Получаем динамику за 3 месяца
@@ -83,6 +87,58 @@ export async function validateDemand(
     console.error("[Wordstat Validator] Ошибка:", error);
     return null;
   }
+}
+
+// Множественная валидация — проверяем спрос по нескольким ключевым словам сразу
+export interface MultiWordstatValidation {
+  keywords: string[];
+  totalMonthlySearches: number; // сумма по всем ключевым словам
+  bestKeyword: WordstatValidation; // ключевое слово с макс. спросом
+  allResults: WordstatValidation[];
+  demandLevel: "high" | "medium" | "low" | "none";
+}
+
+export async function validateDemandMultiple(
+  keywords: string[],
+  token: string
+): Promise<MultiWordstatValidation | null> {
+  // Запускаем все ключевые слова параллельно
+  const results = await Promise.allSettled(
+    keywords.map((kw) => validateDemand(kw, token))
+  );
+
+  const validResults = results
+    .filter(
+      (r): r is PromiseFulfilledResult<WordstatValidation | null> =>
+        r.status === "fulfilled"
+    )
+    .map((r) => r.value)
+    .filter((r): r is WordstatValidation => r !== null);
+
+  if (validResults.length === 0) return null;
+
+  // Лучшее ключевое слово = максимум запросов
+  const sorted = [...validResults].sort(
+    (a, b) => b.monthlySearches - a.monthlySearches
+  );
+  const best = sorted[0];
+
+  // Суммарный спрос (грубая оценка — может быть пересечение аудиторий)
+  const total = validResults.reduce((sum, r) => sum + r.monthlySearches, 0);
+
+  // Уровень спроса по суммарному объёму
+  let demandLevel: "high" | "medium" | "low" | "none" = "none";
+  if (total >= 10000) demandLevel = "high";
+  else if (total >= 1000) demandLevel = "medium";
+  else if (total > 0) demandLevel = "low";
+
+  return {
+    keywords,
+    totalMonthlySearches: total,
+    bestKeyword: best,
+    allResults: validResults,
+    demandLevel,
+  };
 }
 
 // Понедельник, 90 дней назад (требование API Вордстат)

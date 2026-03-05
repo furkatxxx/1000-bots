@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { extractXmlTag } from "./base";
 import { fetchWithTimeout } from "@/lib/utils";
 
 // Google Trends — прямой запрос к публичному RSS-фиду (без пакетов)
@@ -44,49 +45,36 @@ export class GoogleTrendsCollector implements TrendCollector {
   }
 
   private parseRSS(xml: string): TrendItem[] {
-    const items: TrendItem[] = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
 
-    // Собираем все трафики для нормализации
-    const allTraffic: number[] = [];
-    const rawItems: { title: string; traffic: string; link: string | null; news: string | null }[] = [];
-
-    const tempXml = xml;
-    const tempRegex = /<item>([\s\S]*?)<\/item>/g;
-    let tempMatch;
-    while ((tempMatch = tempRegex.exec(tempXml)) !== null) {
-      const itemXml = tempMatch[1];
-      const traffic = this.extractTag(itemXml, "ht:approx_traffic") || "0";
-      allTraffic.push(parseTraffic(traffic));
-    }
-
-    const maxTraffic = Math.max(...allTraffic, 1);
-
-    while ((match = itemRegex.exec(xml)) !== null && items.length < 20) {
+    // Один проход: собираем данные и трафик одновременно
+    const parsed: { title: string; link: string; traffic: string; newsTitle: string | null; trafficNum: number }[] = [];
+    while ((match = itemRegex.exec(xml)) !== null && parsed.length < 20) {
       const itemXml = match[1];
-      const title = this.extractTag(itemXml, "title");
-      const link = this.extractTag(itemXml, "link");
-      const traffic = this.extractTag(itemXml, "ht:approx_traffic") || "0";
-      const newsTitle = this.extractNewsTitle(itemXml);
-
-      if (title) {
-        items.push({
-          sourceId: this.sourceId,
-          title,
-          url: link || `https://trends.google.com/trending?geo=${this.geo}`,
-          score: Math.round((parseTraffic(traffic) / maxTraffic) * 100),
-          summary: newsTitle,
-          category: null,
-          metadata: {
-            traffic,
-            geo: this.geo,
-          },
-        });
-      }
+      const title = extractXmlTag(itemXml, "title");
+      if (!title) continue;
+      const traffic = extractXmlTag(itemXml, "ht:approx_traffic") || "0";
+      parsed.push({
+        title,
+        link: extractXmlTag(itemXml, "link") || `https://trends.google.com/trending?geo=${this.geo}`,
+        traffic,
+        newsTitle: this.extractNewsTitle(itemXml),
+        trafficNum: parseTraffic(traffic),
+      });
     }
 
-    return items;
+    const maxTraffic = Math.max(...parsed.map((p) => p.trafficNum), 1);
+
+    return parsed.map((p) => ({
+      sourceId: this.sourceId,
+      title: p.title,
+      url: p.link,
+      score: Math.round((p.trafficNum / maxTraffic) * 100),
+      summary: p.newsTitle,
+      category: null,
+      metadata: { traffic: p.traffic, geo: this.geo },
+    }));
   }
 
   // Извлечь заголовок новости из <ht:news_item>
@@ -95,13 +83,4 @@ export class GoogleTrendsCollector implements TrendCollector {
     return newsMatch ? newsMatch[1].trim() : null;
   }
 
-  private extractTag(xml: string, tag: string): string | null {
-    // CDATA
-    const cdataMatch = xml.match(new RegExp(`<${tag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`));
-    if (cdataMatch) return cdataMatch[1].trim();
-
-    // Обычный формат
-    const simpleMatch = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
-    return simpleMatch ? simpleMatch[1].trim() : null;
-  }
 }

@@ -20,7 +20,6 @@ const SOURCE_LABELS: Record<string, string> = {
   github_trending: "GitHub Trending",
   product_hunt: "Product Hunt",
   yandex_wordstat: "Яндекс Вордстат",
-  telemetr: "Telemetr.io",
   vk_trends: "VK Тренды",
 };
 
@@ -31,7 +30,6 @@ const SOURCE_COLORS: Record<string, string> = {
   github_trending: "#24292e",
   product_hunt: "#da552f",
   yandex_wordstat: "#fc0",
-  telemetr: "#0088cc",
   vk_trends: "#4a76a8",
 };
 
@@ -71,7 +69,7 @@ export default function TrendsPage() {
     fetchTrends();
   }, [fetchTrends]);
 
-  const sources = ["all", "hacker_news", "google_trends", "news_api", "github_trending", "product_hunt", "yandex_wordstat", "telemetr", "vk_trends"];
+  const sources = ["all", "hacker_news", "google_trends", "news_api", "github_trending", "product_hunt", "yandex_wordstat", "vk_trends"];
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in">

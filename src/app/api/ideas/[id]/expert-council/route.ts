@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { expertCouncil } from "@/lib/ai-brain";
+import { expertChain } from "@/lib/expert-chain";
 import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 
 // POST /api/ideas/[id]/expert-council — запустить экспертный совет с автовалидацией
@@ -56,22 +57,35 @@ export async function POST(
       console.log("[Expert Council] Нет ключей для валидации — только AI-анализ");
     }
 
-    // 2. Вызываем экспертный совет с данными валидации
-    const result = await expertCouncil({
-      idea: {
-        name: idea.name,
-        description: idea.description,
-        targetAudience: idea.targetAudience,
-        monetization: idea.monetization,
-        startupCost: idea.startupCost,
-        competitionLevel: idea.competitionLevel,
-        actionPlan: idea.actionPlan,
-        estimatedRevenue: idea.estimatedRevenue,
-      },
-      apiKey: settings.anthropicApiKey,
-      model: settings.preferredModel || "claude-haiku-4-5-20251001",
-      validationContext: validationContext || undefined,
-    });
+    // 2. Вызываем цепочку экспертов (или старый совет через ?chain=false)
+    const url = new URL(_request.url);
+    const useChain = url.searchParams.get("chain") !== "false";
+    const expertModel = settings.expertModel || settings.preferredModel || "claude-haiku-4-5-20251001";
+
+    const ideaData = {
+      name: idea.name,
+      description: idea.description,
+      targetAudience: idea.targetAudience,
+      monetization: idea.monetization,
+      startupCost: idea.startupCost,
+      competitionLevel: idea.competitionLevel,
+      actionPlan: idea.actionPlan,
+      estimatedRevenue: idea.estimatedRevenue,
+    };
+
+    const result = useChain
+      ? await expertChain({
+          idea: ideaData,
+          apiKey: settings.anthropicApiKey,
+          model: expertModel,
+          validationContext: validationContext || undefined,
+        })
+      : await expertCouncil({
+          idea: ideaData,
+          apiKey: settings.anthropicApiKey,
+          model: expertModel,
+          validationContext: validationContext || undefined,
+        });
 
     // Сохраняем в БД
     await prisma.businessIdea.update({

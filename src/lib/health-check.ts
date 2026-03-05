@@ -29,7 +29,6 @@ export interface HealthCheckSettings {
   newsApiKey?: string | null;
   vkServiceToken?: string | null;
   wordstatToken?: string | null;
-  telemetrApiKey?: string | null;
 }
 
 // Названия источников на русском
@@ -41,7 +40,6 @@ export const SOURCE_LABELS: Record<string, string> = {
   product_hunt: "Product Hunt",
   reddit: "Reddit",
   yandex_wordstat: "Яндекс Вордстат",
-  telemetr: "Telemetr.io",
   vk_trends: "VK Тренды",
 };
 
@@ -196,29 +194,14 @@ export async function runHealthCheck(
             },
             body: JSON.stringify({
               phrase: "бизнес",
-              regions: [],
+              regions: [225], // 225 = вся Россия
               devices: ["all"],
             }),
           }
         );
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
-        return d.queries?.length || 0;
-      })
-    );
-  }
-
-  // 9. Telemetr (нужен ключ)
-  if (settings.telemetrApiKey) {
-    checks.push(
-      checkSource("telemetr", "Telemetr.io", async () => {
-        const r = await fetchWithTimeout(
-          "https://api.telemetr.io/v1/catalog/search?q=бизнес&limit=3",
-          { headers: { "X-Api-Key": settings.telemetrApiKey! } }
-        );
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const d = await r.json();
-        return Array.isArray(d) ? d.length : 0;
+        return d.topRequests?.length || d.queries?.length || 0;
       })
     );
   }

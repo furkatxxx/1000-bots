@@ -26,7 +26,6 @@ async function handleHealthCheck(sendTelegram: boolean) {
       newsApiKey: settings?.newsApiKey,
       vkServiceToken: settings?.vkServiceToken,
       wordstatToken: settings?.wordstatToken,
-      telemetrApiKey: settings?.telemetrApiKey,
     });
 
     // Отправляем в Telegram если есть проблемы и запрошено

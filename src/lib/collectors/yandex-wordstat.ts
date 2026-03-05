@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { detectCategory } from "./base";
 import { fetchWithTimeout } from "@/lib/utils";
 
 const WORDSTAT_API = "https://api.wordstat.yandex.net";
@@ -29,10 +30,12 @@ const SEED_PHRASES = [
 ];
 
 interface WordstatTopResponse {
-  queries: Array<{
-    text: string;
+  topRequests: Array<{
+    phrase: string;
     count: number;
   }>;
+  requestPhrase: string;
+  totalCount: number;
 }
 
 interface WordstatDynamicsResponse {
@@ -43,15 +46,6 @@ interface WordstatDynamicsResponse {
   }>;
 }
 
-function detectCategory(phrase: string): string {
-  const lower = phrase.toLowerCase();
-  if (/нейросет|ии|искусственн|ai|gpt|бот/.test(lower)) return "ai";
-  if (/бизнес|заработ|доход|деньг/.test(lower)) return "business";
-  if (/маркетплейс|wildberries|ozon|авито|товар/.test(lower)) return "ecommerce";
-  if (/продвижени|контент|smm|instagram|reels|telegram/.test(lower)) return "marketing";
-  if (/crm|saas|сервис|парсинг|автоматизац/.test(lower)) return "saas";
-  return "trending";
-}
 
 export class YandexWordstatCollector implements TrendCollector {
   sourceId = "yandex_wordstat";
@@ -117,7 +111,7 @@ export class YandexWordstatCollector implements TrendCollector {
         },
         body: JSON.stringify({
           phrase: seedPhrase,
-          regions: [], // Все регионы РФ
+          regions: [225], // 225 = вся Россия
           devices: ["all"],
         }),
       });
@@ -130,16 +124,16 @@ export class YandexWordstatCollector implements TrendCollector {
 
       const data: WordstatTopResponse = await res.json();
 
-      if (!data.queries || data.queries.length === 0) return [];
+      if (!data.topRequests || data.topRequests.length === 0) return [];
 
       // Берём топ-5 запросов из каждой seed-фразы
-      return data.queries.slice(0, 5).map((q) => ({
+      return data.topRequests.slice(0, 5).map((q) => ({
         sourceId: this.sourceId,
-        title: q.text,
-        url: `https://wordstat.yandex.ru/#!/?words=${encodeURIComponent(q.text)}`,
+        title: q.phrase,
+        url: `https://wordstat.yandex.ru/#!/?words=${encodeURIComponent(q.phrase)}`,
         score: q.count, // Абсолютная частотность — будет нормализована позже
         summary: `${q.count.toLocaleString("ru-RU")} запросов/мес в Яндексе`,
-        category: detectCategory(q.text),
+        category: detectCategory(q.phrase),
         metadata: {
           seedPhrase,
           monthlySearches: q.count,

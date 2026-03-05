@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { detectCategory } from "./base";
 import { fetchWithTimeout } from "@/lib/utils";
 
 const NEWSAPI_BASE = "https://newsapi.org/v2";
@@ -17,15 +18,6 @@ interface NewsAPIResponse {
   articles: NewsArticle[];
 }
 
-// Определяем категорию по заголовку
-function detectCategory(title: string): string | null {
-  const lower = title.toLowerCase();
-  if (/ai|artificial intelligence|machine learning|llm|chatgpt|claude/.test(lower)) return "ai";
-  if (/startup|funding|raise|venture/.test(lower)) return "startup";
-  if (/business|economy|market|stock/.test(lower)) return "business";
-  if (/tech|software|app|platform/.test(lower)) return "tech";
-  return null;
-}
 
 export class NewsAPICollector implements TrendCollector {
   sourceId = "news_api";

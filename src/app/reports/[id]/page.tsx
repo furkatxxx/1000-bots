@@ -7,7 +7,7 @@ import { IdeaCard } from "@/components/ui/IdeaCard";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import type { IdeaDTO } from "@/lib/types";
 
-type SortBy = "chance" | "revenue" | "difficulty" | "default";
+type SortBy = "chance" | "revenue" | "difficulty" | "expert" | "default";
 type ViewMode = "cards" | "list";
 type MarketFilter = "all" | "russia" | "global";
 
@@ -17,18 +17,27 @@ export default function ReportDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { report, loading, error, refetch } = useReport(id);
+  const { report, setReport, loading, error } = useReport(id);
   const [sortBy, setSortBy] = useState<SortBy>("default");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
 
   async function handleToggleFavorite(ideaId: string, isFavorite: boolean) {
-    await fetch(`/api/ideas/${ideaId}`, {
+    // Оптимистичное обновление — звёздочка меняется мгновенно, без перезагрузки
+    if (report) {
+      setReport({
+        ...report,
+        ideas: report.ideas.map((idea) =>
+          idea.id === ideaId ? { ...idea, isFavorite } : idea
+        ),
+      });
+    }
+    // Сохраняем на сервер в фоне
+    fetch(`/api/ideas/${ideaId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isFavorite }),
     });
-    refetch();
   }
 
   const sortedIdeas = useMemo(() => {
@@ -41,6 +50,7 @@ export default function ReportDetailPage({
     }
 
     if (sortBy === "chance") ideas.sort((a, b) => (b.successChance || 0) - (a.successChance || 0));
+    if (sortBy === "expert") ideas.sort((a, b) => (b.expertAnalysis?.finalScore || 0) - (a.expertAnalysis?.finalScore || 0));
     if (sortBy === "revenue") ideas.sort((a, b) => parseRevenue(b.estimatedRevenue) - parseRevenue(a.estimatedRevenue));
     if (sortBy === "difficulty") {
       const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
@@ -75,6 +85,7 @@ export default function ReportDetailPage({
 
   const sortOptions: { value: SortBy; label: string }[] = [
     { value: "default", label: "По умолчанию" },
+    { value: "expert", label: "По экспертам ↓" },
     { value: "chance", label: "По шансу ↓" },
     { value: "revenue", label: "По доходу ↓" },
     { value: "difficulty", label: "По сложности" },
@@ -200,7 +211,12 @@ export default function ReportDetailPage({
 
 // Строчный вид идеи
 function IdeaListItem({ idea, onToggleFavorite }: { idea: IdeaDTO; onToggleFavorite?: (id: string, fav: boolean) => void }) {
-  const chanceColor = (idea.successChance || 0) >= 70 ? "var(--success)" : (idea.successChance || 0) >= 40 ? "var(--warning)" : "var(--destructive)";
+  const expertScore = idea.expertAnalysis?.finalScore;
+  const hasExpert = expertScore != null;
+  const scoreValue = hasExpert ? expertScore : (idea.successChance || 0);
+  const scoreColor = hasExpert
+    ? (expertScore >= 7 ? "var(--success)" : expertScore >= 5 ? "var(--warning)" : "var(--destructive)")
+    : ((idea.successChance || 0) >= 70 ? "var(--success)" : (idea.successChance || 0) >= 40 ? "var(--warning)" : "var(--destructive)");
   const diffLabels: Record<string, string> = { easy: "Легко", medium: "Средне", hard: "Сложно" };
 
   return (
@@ -224,12 +240,14 @@ function IdeaListItem({ idea, onToggleFavorite }: { idea: IdeaDTO; onToggleFavor
         </div>
       </div>
 
-      {idea.successChance != null && (
-        <div className="text-right">
-          <div className="text-sm font-bold" style={{ color: chanceColor }}>{idea.successChance}%</div>
-          <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>шанс</div>
+      <div className="text-right">
+        <div className="text-sm font-bold" style={{ color: scoreColor }}>
+          {hasExpert ? `${expertScore}/10` : scoreValue != null ? `${scoreValue}%` : "—"}
         </div>
-      )}
+        <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          {hasExpert ? "эксперты" : "шанс"}
+        </div>
+      </div>
 
       {idea.estimatedRevenue && (
         <div className="hidden text-right sm:block">

@@ -38,10 +38,10 @@ export interface GeneratedIdea {
 
 // Сценарий развития для конкретного рынка
 export interface MarketScenario {
-  revenue: string;      // Ожидаемый доход
-  channels: string;     // Каналы привлечения
-  audience: string;     // Целевая аудитория
-  advantages: string;   // Преимущества на этом рынке
+  revenue: string;
+  channels: string;
+  audience: string;
+  advantages: string;
 }
 
 // Два сценария: Россия и мировой рынок
@@ -85,7 +85,7 @@ export interface TrackerVerdict extends ExpertVerdict {
 // Маркетолог
 export interface MarketerVerdict extends ExpertVerdict {
   channels: string[];
-  cac: string; // стоимость привлечения клиента
+  cac: string;
 }
 
 // Продакт-менеджер
@@ -103,9 +103,9 @@ export interface FinancierVerdict extends ExpertVerdict {
 
 // Скептик (адвокат дьявола)
 export interface SkepticVerdict extends ExpertVerdict {
-  killerRisks: string[];     // «убийственные» риски — причины полного провала
-  failureScenario: string;   // самый вероятный сценарий неудачи
-  counterArguments: string;  // контраргументы к оптимистичным оценкам других экспертов
+  killerRisks: string[];
+  failureScenario: string;
+  counterArguments: string;
 }
 
 // Совокупный результат экспертного совета
@@ -114,11 +114,19 @@ export interface ExpertAnalysis {
   marketer: MarketerVerdict;
   product: ProductVerdict;
   financier: FinancierVerdict;
-  skeptic?: SkepticVerdict;  // 5-й эксперт, опционально для обратной совместимости
+  skeptic?: SkepticVerdict;
   finalVerdict: "launch" | "pivot" | "reject";
   finalScore: number; // средняя оценка 1-10
   summary: string;
-  debates?: string; // где эксперты не согласны друг с другом
+  debates?: string;
+}
+
+// Шаг цепочки экспертов
+export interface ExpertChainStep {
+  expert: "tracker" | "marketer" | "product" | "financier" | "skeptic" | "moderator";
+  status: "started" | "done" | "error";
+  tokensIn?: number;
+  tokensOut?: number;
 }
 
 // DTO для идеи в API
@@ -143,10 +151,10 @@ export interface IdeaDTO {
   marketScenarios: MarketScenarios | null;
   deepDive: string | null;
   expertAnalysis: ExpertAnalysis | null;
-  analogs: string | null;         // JSON: аналоги (#32)
-  landingHtml: string | null;     // HTML лендинга (#33)
-  marketAnalysis: string | null;  // JSON: TAM/SAM/SOM + SEO (#34, #35)
-  adCopy: string | null;          // JSON: рекламные тексты (#36)
+  analogs: string | null;
+  landingHtml: string | null;
+  marketAnalysis: string | null;
+  adCopy: string | null;
   rating: number | null;
   isFavorite: boolean;
   isArchived: boolean;

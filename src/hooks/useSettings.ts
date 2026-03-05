@@ -12,9 +12,12 @@ interface Settings {
   telegramBotToken: string;
   telegramChatId: string;
   dadataApiKey: string;
-  telemetrApiKey: string;
   vkServiceToken: string;
   siteUrl: string;
+  expertModel: string;
+  scheduleEnabled: boolean;
+  scheduleTime: string;
+  scheduleAutoTelegram: boolean;
 }
 
 export function useSettings() {

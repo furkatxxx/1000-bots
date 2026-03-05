@@ -43,5 +43,5 @@ export function useReport(id: string) {
     fetch_();
   }, [fetch_]);
 
-  return { report, loading, error, refetch: fetch_ };
+  return { report, setReport, loading, error, refetch: fetch_ };
 }

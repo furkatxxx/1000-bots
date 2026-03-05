@@ -1,4 +1,5 @@
 import type { TrendCollector, TrendItem } from "./base";
+import { detectCategory } from "./base";
 import { fetchWithTimeout, concurrentMap } from "@/lib/utils";
 
 const HN_API = "https://hacker-news.firebaseio.com/v0";
@@ -13,16 +14,6 @@ interface HNStory {
   descendants?: number;
 }
 
-// Определяем категорию по ключевым словам в заголовке
-function detectCategory(title: string): string | null {
-  const lower = title.toLowerCase();
-  if (/\bai\b|artificial intelligence|llm|gpt|claude|machine learning/.test(lower)) return "ai";
-  if (/startup|funding|vc|raise|seed|series/.test(lower)) return "startup";
-  if (/saas|subscription|mrr|arr/.test(lower)) return "saas";
-  if (/crypto|bitcoin|blockchain|web3/.test(lower)) return "crypto";
-  if (/open.?source|github|repo/.test(lower)) return "opensource";
-  return "tech";
-}
 
 export class HackerNewsCollector implements TrendCollector {
   sourceId = "hacker_news";

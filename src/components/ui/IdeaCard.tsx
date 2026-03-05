@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import type { IdeaDTO } from "@/lib/types";
+import { getDifficultyLabel, getDifficultyColor } from "@/lib/utils";
 
 interface IdeaCardProps {
   idea: IdeaDTO;
@@ -13,17 +14,10 @@ export const IdeaCard = React.memo(function IdeaCard({
   idea,
   onToggleFavorite,
 }: IdeaCardProps) {
-  const difficultyColors: Record<string, string> = {
-    easy: "var(--success)",
-    medium: "var(--warning)",
-    hard: "var(--destructive)",
-  };
 
-  const difficultyLabels: Record<string, string> = {
-    easy: "Легко",
-    medium: "Средне",
-    hard: "Сложно",
-  };
+  const hasExpert = idea.expertAnalysis?.finalScore != null;
+  const displayScore = idea.expertAnalysis?.finalScore;
+  const displayVerdict = idea.expertAnalysis?.finalVerdict;
 
   return (
     <div
@@ -47,11 +41,11 @@ export const IdeaCard = React.memo(function IdeaCard({
               <span
                 className="rounded-full px-2 py-0.5 text-xs font-medium"
                 style={{
-                  backgroundColor: `${difficultyColors[idea.difficulty] || "var(--muted)"}20`,
-                  color: difficultyColors[idea.difficulty] || "var(--muted-foreground)",
+                  backgroundColor: `${getDifficultyColor(idea.difficulty) || "var(--muted)"}20`,
+                  color: getDifficultyColor(idea.difficulty) || "var(--muted-foreground)",
                 }}
               >
-                {difficultyLabels[idea.difficulty] || idea.difficulty}
+                {getDifficultyLabel(idea.difficulty) || idea.difficulty}
               </span>
               {idea.market && idea.market !== "both" && (
                 <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
@@ -61,17 +55,6 @@ export const IdeaCard = React.memo(function IdeaCard({
               {idea.market === "both" && (
                 <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
                   🇷🇺🌍
-                </span>
-              )}
-              {idea.claudeCodeReady && (
-                <span
-                  className="rounded-full px-2 py-0.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: "var(--primary-light, #0071e320)",
-                    color: "var(--primary)",
-                  }}
-                >
-                  Можно собрать в коде
                 </span>
               )}
             </div>
@@ -94,35 +77,42 @@ export const IdeaCard = React.memo(function IdeaCard({
         {idea.description}
       </p>
 
-      {/* Шанс успеха — прогресс-бар */}
-      {idea.successChance != null && (
+      {/* Экспертная оценка */}
+      {hasExpert && displayScore != null && displayVerdict ? (
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between">
             <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
-              Шанс успеха
+              Экспертная оценка
             </span>
-            <span className="text-xs font-bold" style={{
-              color: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
-            }}>
-              {idea.successChance}%
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold" style={{
+                color: displayScore >= 7 ? "var(--success)" : displayScore >= 5 ? "var(--warning)" : "var(--destructive)",
+              }}>
+                {displayScore}/10
+              </span>
+              <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{
+                backgroundColor: displayVerdict === "launch" ? "var(--success)20" : displayVerdict === "pivot" ? "var(--warning)20" : "var(--destructive)20",
+                color: displayVerdict === "launch" ? "var(--success)" : displayVerdict === "pivot" ? "var(--warning)" : "var(--destructive)",
+              }}>
+                {displayVerdict === "launch" ? "Запускать" : displayVerdict === "pivot" ? "Доработать" : "Отказаться"}
+              </span>
+            </div>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--muted)" }}>
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
-                width: `${idea.successChance}%`,
-                backgroundColor: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
+                width: `${displayScore * 10}%`,
+                backgroundColor: displayScore >= 7 ? "var(--success)" : displayScore >= 5 ? "var(--warning)" : "var(--destructive)",
               }}
             />
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Tag label="Аудитория" value={idea.targetAudience} />
         <Tag label="Монетизация" value={idea.monetization} />
-        {idea.timeToLaunch && <Tag label="Запуск" value={idea.timeToLaunch} />}
       </div>
 
       {idea.rating && (
@@ -151,7 +141,6 @@ const Tag = React.memo(function Tag({
   label: string;
   value: string;
 }) {
-  // Показываем только первые 50 символов
   const short = value.length > 50 ? value.slice(0, 47) + "..." : value;
   return (
     <span

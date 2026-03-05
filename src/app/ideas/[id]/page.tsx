@@ -2,8 +2,8 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import type { IdeaDTO, ExpertAnalysis, MarketScenarios, SkepticVerdict } from "@/lib/types";
-import { LaunchToolkit } from "./launch-toolkit";
+import type { IdeaDTO, ExpertAnalysis, MarketScenarios } from "@/lib/types";
+import { getDifficultyLabel, getDifficultyColor } from "@/lib/utils";
 
 export default function IdeaDetailPage({
   params,
@@ -124,13 +124,6 @@ export default function IdeaDetailPage({
     );
   }
 
-  const difficultyLabels: Record<string, string> = {
-    easy: "Легко", medium: "Средне", hard: "Сложно",
-  };
-  const difficultyColors: Record<string, string> = {
-    easy: "var(--success)", medium: "var(--warning)", hard: "var(--destructive)",
-  };
-
   return (
     <div className="mx-auto max-w-3xl animate-fade-in">
       <div className="mb-2">
@@ -149,11 +142,11 @@ export default function IdeaDetailPage({
               <span
                 className="rounded-full px-2.5 py-0.5 text-xs font-medium"
                 style={{
-                  backgroundColor: `${difficultyColors[idea.difficulty] || "var(--muted)"}20`,
-                  color: difficultyColors[idea.difficulty] || "var(--muted-foreground)",
+                  backgroundColor: `${getDifficultyColor(idea.difficulty) || "var(--muted)"}20`,
+                  color: getDifficultyColor(idea.difficulty) || "var(--muted-foreground)",
                 }}
               >
-                {difficultyLabels[idea.difficulty] || idea.difficulty}
+                {getDifficultyLabel(idea.difficulty) || idea.difficulty}
               </span>
               {idea.market && idea.market !== "both" && (
                 <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--muted)" }}>
@@ -212,15 +205,35 @@ export default function IdeaDetailPage({
       )}
 
       {/* Ключевые метрики */}
-      {(idea.successChance != null || idea.estimatedRevenue || idea.timeToLaunch) && (
+      {(idea.successChance != null || idea.expertAnalysis || idea.estimatedRevenue || idea.timeToLaunch) && (
         <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {idea.successChance != null && (
+          {/* Экспертная оценка (если есть) или шанс успеха */}
+          {idea.expertAnalysis?.finalScore != null ? (
             <div
               className="rounded-2xl p-4 text-center"
               style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
             >
               <div className="mb-1 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
-                Шанс успеха
+                Экспертная оценка
+              </div>
+              <div className="text-2xl font-bold" style={{
+                color: idea.expertAnalysis.finalScore >= 7 ? "var(--success)" : idea.expertAnalysis.finalScore >= 5 ? "var(--warning)" : "var(--destructive)",
+              }}>
+                {idea.expertAnalysis.finalScore}/10
+              </div>
+              <div className="mt-1 text-xs font-medium" style={{
+                color: idea.expertAnalysis.finalVerdict === "launch" ? "var(--success)" : idea.expertAnalysis.finalVerdict === "pivot" ? "var(--warning)" : "var(--destructive)",
+              }}>
+                {idea.expertAnalysis.finalVerdict === "launch" ? "Запускать" : idea.expertAnalysis.finalVerdict === "pivot" ? "Доработать" : "Отказаться"}
+              </div>
+            </div>
+          ) : idea.successChance != null ? (
+            <div
+              className="rounded-2xl p-4 text-center"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
+            >
+              <div className="mb-1 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+                Шанс успеха <span className="opacity-50">(самооценка)</span>
               </div>
               <div className="text-2xl font-bold" style={{
                 color: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
@@ -234,7 +247,7 @@ export default function IdeaDetailPage({
                 }} />
               </div>
             </div>
-          )}
+          ) : null}
           {idea.estimatedRevenue && (
             <div
               className="rounded-2xl p-4 text-center"
@@ -370,15 +383,6 @@ export default function IdeaDetailPage({
         )}
       </div>
 
-      {/* #32-38 — Инструменты запуска */}
-      <LaunchToolkit
-        ideaId={id}
-        hasLanding={idea.landingHtml !== null}
-        hasAnalogs={idea.analogs !== null}
-        hasMarketAnalysis={idea.marketAnalysis !== null}
-        hasAdCopy={idea.adCopy !== null}
-        onLandingGenerated={() => setIdea((prev) => prev ? { ...prev, landingHtml: "[html]" } : prev)}
-      />
     </div>
   );
 }
@@ -619,6 +623,7 @@ function ExpertCouncilPanel({ analysis }: { analysis: ExpertAnalysis }) {
           </div>
         ))}
       </div>
+
     </div>
   );
 }

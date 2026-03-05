@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // Результат проверки одного источника (от /api/health/sources)
 export interface SourceCheckDTO {
@@ -44,6 +44,22 @@ export function useGenerate() {
   const [phase, setPhase] = useState<GeneratePhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [healthCheck, setHealthCheck] = useState<HealthCheckDTO | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  // Таймер прошедшего времени — тикает каждую секунду пока идёт генерация
+  useEffect(() => {
+    if (phase === "generating") {
+      setElapsed(0);
+      timerRef.current = setInterval(() => {
+        setElapsed((prev) => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+      if (phase === "idle") setElapsed(0);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [phase]);
 
   async function generate(): Promise<GenerateResult | null> {
     setGenerating(true);
@@ -130,5 +146,5 @@ export function useGenerate() {
     setHealthCheck(null);
   }
 
-  return { generate, generating, phase, error, healthCheck, resetError };
+  return { generate, generating, phase, elapsed, error, healthCheck, resetError };
 }
