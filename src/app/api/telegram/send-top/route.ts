@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
       topIdeas = withExperts;
     }
 
-    const siteUrl = settings.siteUrl?.replace(/\/+$/, "") || "";
+    const siteUrl = settings.siteUrl?.replace(/\/+$/, "")
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
 
     // Формируем сообщение
     const date = report.date.toLocaleDateString("ru-RU", {

@@ -15,6 +15,8 @@ export default function DashboardPage() {
   const { generate, generating, phase, elapsed, healthCheck, resetError } = useGenerate();
   const { showToast } = useToast();
   const [sendingTg, setSendingTg] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState("");
 
   // Сегодняшний отчёт — первый в списке (отсортированы по дате desc)
   const todayReport = reports.length > 0 ? reports[0] : null;
@@ -24,8 +26,12 @@ export default function DashboardPage() {
   const totalIdeas = reports.reduce((sum, r) => sum + r.ideasCount, 0);
   const totalTrends = reports.reduce((sum, r) => sum + r.trendsCount, 0);
 
-  async function handleGenerate() {
-    const result = await generate();
+  async function handleGenerate(pwd?: string) {
+    const result = await generate(pwd);
+    if (result?.needPassword) {
+      setShowPasswordModal(true);
+      return;
+    }
     if (result?.success) {
       showToast(`Отчёт готов! ${result.report?.ideasCount} идей`, "success");
       refetchReports();
@@ -33,6 +39,12 @@ export default function DashboardPage() {
       showToast(result?.error || "Ошибка генерации", "error");
       refetchReports();
     }
+  }
+
+  async function handlePasswordSubmit() {
+    setShowPasswordModal(false);
+    await handleGenerate(password);
+    setPassword("");
   }
 
   async function handleSendTelegram() {
@@ -107,6 +119,44 @@ export default function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <SkeletonCard />
           <SkeletonCard />
+        </div>
+      )}
+
+      {/* Модальное окно ввода пароля */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="mx-4 w-full max-w-sm rounded-2xl p-6" style={{ backgroundColor: "var(--card)" }}>
+            <h3 className="mb-2 text-lg font-semibold">Введите пароль</h3>
+            <p className="mb-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
+              Генерация защищена паролем
+            </p>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handlePasswordSubmit()}
+              placeholder="Пароль"
+              autoFocus
+              className="mb-4 w-full rounded-xl border px-4 py-3 text-sm outline-none"
+              style={{ borderColor: "var(--border)", backgroundColor: "var(--muted)" }}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowPasswordModal(false); setPassword(""); }}
+                className="flex-1 cursor-pointer rounded-xl px-4 py-2.5 text-sm font-medium"
+                style={{ backgroundColor: "var(--muted)" }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handlePasswordSubmit}
+                className="flex-1 cursor-pointer rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+                style={{ backgroundColor: "var(--primary)" }}
+              >
+                Подтвердить
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

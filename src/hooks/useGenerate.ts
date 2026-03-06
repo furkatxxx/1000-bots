@@ -30,6 +30,7 @@ interface GenerateResult {
     trendsCount: number;
   };
   error?: string;
+  needPassword?: boolean;
   healthCheck?: HealthCheckDTO;
 }
 
@@ -61,7 +62,7 @@ export function useGenerate() {
     return () => clearInterval(timerRef.current);
   }, [phase]);
 
-  async function generate(): Promise<GenerateResult | null> {
+  async function generate(password?: string): Promise<GenerateResult | null> {
     setGenerating(true);
     setError(null);
     setHealthCheck(null);
@@ -107,14 +108,24 @@ export function useGenerate() {
       // ═══════════════════════════════════════════
       setPhase("generating");
 
-      const res = await fetch("/api/reports", { method: "POST" });
+      const fetchOpts: RequestInit = {
+        method: "POST",
+        ...(password ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        } : {}),
+      };
+      const res = await fetch("/api/reports", fetchOpts);
       const data = await res.json();
 
       if (!res.ok || !data.success) {
         const msg = data.error || "Ошибка генерации";
         setError(msg);
 
-        // Если бэкенд тоже вернул healthCheck (страховка)
+        if (data.needPassword) {
+          return { success: false, error: msg, needPassword: true };
+        }
+
         if (data.healthCheck) {
           setHealthCheck(data.healthCheck);
         }

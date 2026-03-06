@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
 import { generateIdeas, filterTrends, semanticDedup } from "@/lib/ai-brain";
@@ -12,6 +12,10 @@ import {
 } from "@/lib/health-check";
 
 export const maxDuration = 300;
+
+// Дедлайн: 2026-03-07 12:00 МСК (09:00 UTC)
+const LOCK_AFTER = new Date("2026-03-07T09:00:00Z");
+const GENERATE_PASSWORD = "0811";
 
 // GET /api/reports — список всех отчётов
 export async function GET() {
@@ -45,7 +49,25 @@ export async function GET() {
 }
 
 // POST /api/reports — генерация отчёта (упрощённый pipeline)
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Защита паролем после дедлайна
+  if (Date.now() > LOCK_AFTER.getTime()) {
+    try {
+      const body = await request.json();
+      if (body?.password !== GENERATE_PASSWORD) {
+        return NextResponse.json(
+          { success: false, error: "Требуется пароль для генерации", needPassword: true },
+          { status: 403 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Требуется пароль для генерации", needPassword: true },
+        { status: 403 }
+      );
+    }
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
