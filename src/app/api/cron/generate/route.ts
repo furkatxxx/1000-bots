@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
 import { generateIdeas, filterTrends, semanticDedup } from "@/lib/ai-brain";
-import { expertChain } from "@/lib/expert-chain";
-import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
   isHealthyEnough,
-  SOURCE_LABELS,
 } from "@/lib/health-check";
 import { fetchWithTimeout } from "@/lib/utils";
 
@@ -180,63 +177,13 @@ export async function GET(request: NextRequest) {
         })),
       });
 
-      // Шаг 6: Цепочка экспертов
-      const savedIdeas = await prisma.businessIdea.findMany({
-        where: { reportId: report.id },
-        orderBy: { createdAt: "asc" },
-      });
-
-      for (const idea of savedIdeas) {
-        try {
-          const validationData = await collectValidationData({
-            ideaName: idea.name,
-            ideaDescription: idea.description,
-            targetAudience: idea.targetAudience,
-            wordstatToken: settings.wordstatToken || undefined,
-            dadataApiKey: settings.dadataApiKey || undefined,
-          });
-          const validationContext = formatValidationForPrompt(validationData);
-
-          const expertResult = await expertChain({
-            idea: {
-              name: idea.name,
-              description: idea.description,
-              targetAudience: idea.targetAudience,
-              monetization: idea.monetization,
-              startupCost: idea.startupCost,
-              competitionLevel: idea.competitionLevel,
-              actionPlan: idea.actionPlan,
-              estimatedRevenue: idea.estimatedRevenue,
-              trendBacking: idea.trendBacking,
-            },
-            apiKey: settings.anthropicApiKey,
-            model: expertModel,
-            validationContext: validationContext || undefined,
-          });
-
-          await prisma.businessIdea.update({
-            where: { id: idea.id },
-            data: { expertAnalysis: JSON.stringify(expertResult.analysis) },
-          });
-
-          totalTokensIn += expertResult.tokensIn;
-          totalTokensOut += expertResult.tokensOut;
-        } catch (error) {
-          console.error(`[Cron] Ошибка экспертов для "${idea.name}":`, error);
-        }
-      }
-
-      // Шаг 7: Финализация
-      const completedIdeas = await prisma.businessIdea.findMany({
-        where: { reportId: report.id },
-      });
-
+      // Шаг 6: Финализация (экспертов пропускаем — не влезают в лимит Vercel)
       await prisma.dailyReport.update({
         where: { id: report.id },
         data: {
           status: "complete",
           trendsCount: trendItems.length,
-          ideasCount: completedIdeas.length,
+          ideasCount: finalIdeas.length,
           aiModel: generationModel,
           aiTokensIn: totalTokensIn,
           aiTokensOut: totalTokensOut,
@@ -257,10 +204,10 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      console.log(`[Cron] Отчёт создан: ${completedIdeas.length} идей`);
+      console.log(`[Cron] Отчёт создан: ${finalIdeas.length} идей`);
       return NextResponse.json({
         success: true,
-        ideasCount: completedIdeas.length,
+        ideasCount: finalIdeas.length,
         trendsCount: trendItems.length,
       });
     } catch (error) {

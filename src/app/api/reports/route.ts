@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
 import { generateIdeas, filterTrends, semanticDedup } from "@/lib/ai-brain";
-import { expertChain } from "@/lib/expert-chain";
-import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
@@ -256,70 +254,11 @@ export async function POST(request: NextRequest) {
     });
 
     // ═══════════════════════════════════════════════════
-    // ШАГ 6: ЦЕПОЧКА ЭКСПЕРТОВ (Haiku, 6 вызовов на идею)
+    // ШАГ 6: ФИНАЛИЗАЦИЯ (экспертов запустит фронтенд отдельно)
     // ═══════════════════════════════════════════════════
-    const savedIdeas = await prisma.businessIdea.findMany({
-      where: { reportId: report.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    console.log(`[Gen] Шаг 6: Цепочка экспертов для ${savedIdeas.length} идей (${expertModel})`);
-
-    for (let i = 0; i < savedIdeas.length; i++) {
-      const idea = savedIdeas[i];
-      console.log(`[Gen] Эксперты ${i + 1}/${savedIdeas.length}: ${idea.name}`);
-
-      try {
-        const validationData = await collectValidationData({
-          ideaName: idea.name,
-          ideaDescription: idea.description,
-          targetAudience: idea.targetAudience,
-          wordstatToken: settings.wordstatToken || undefined,
-          dadataApiKey: settings.dadataApiKey || undefined,
-        });
-        const validationContext = formatValidationForPrompt(validationData);
-
-        const expertResult = await expertChain({
-          idea: {
-            name: idea.name,
-            description: idea.description,
-            targetAudience: idea.targetAudience,
-            monetization: idea.monetization,
-            startupCost: idea.startupCost,
-            competitionLevel: idea.competitionLevel,
-            actionPlan: idea.actionPlan,
-            estimatedRevenue: idea.estimatedRevenue,
-            trendBacking: idea.trendBacking,
-          },
-          apiKey: settings.anthropicApiKey,
-          model: expertModel,
-          validationContext: validationContext || undefined,
-        });
-
-        await prisma.businessIdea.update({
-          where: { id: idea.id },
-          data: { expertAnalysis: JSON.stringify(expertResult.analysis) },
-        });
-
-        totalTokensIn += expertResult.tokensIn;
-        totalTokensOut += expertResult.tokensOut;
-      } catch (error) {
-        console.error(`[Gen] Ошибка экспертов для "${idea.name}":`, error);
-      }
-    }
-
-    // ═══════════════════════════════════════════════════
-    // ШАГ 7: ФИНАЛИЗАЦИЯ
-    // ═══════════════════════════════════════════════════
-    const completedIdeas = await prisma.businessIdea.findMany({
-      where: { reportId: report.id },
-    });
-    const withExperts = completedIdeas.filter((i) => i.expertAnalysis);
-
     console.log(`[Gen] ═══ ИТОГ ═══`);
     console.log(`[Gen] Тренды: ${trendItems.length} собрано, ${trendsForAI.length} после фильтра`);
     console.log(`[Gen] Идеи: ${genResult.ideas.length} → ${finalIdeas.length} (после дедупа)`);
-    console.log(`[Gen] С экспертами: ${withExperts.length}`);
     console.log(`[Gen] Токены: ${totalTokensIn} in, ${totalTokensOut} out`);
 
     const updated = await prisma.dailyReport.update({
@@ -327,7 +266,7 @@ export async function POST(request: NextRequest) {
       data: {
         status: "complete",
         trendsCount: trendItems.length,
-        ideasCount: completedIdeas.length,
+        ideasCount: finalIdeas.length,
         aiModel: generationModel,
         aiTokensIn: totalTokensIn,
         aiTokensOut: totalTokensOut,
@@ -349,7 +288,6 @@ export async function POST(request: NextRequest) {
         afterFilter: trendsForAI.length,
         generated: genResult.ideas.length,
         afterDedup: finalIdeas.length,
-        withExperts: withExperts.length,
       },
     });
   } catch (error) {
