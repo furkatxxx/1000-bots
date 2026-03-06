@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -120,7 +120,7 @@ model Settings {
   telegramBotToken  String? // Токен Telegram-бота
   telegramChatId    String? // Chat ID для уведомлений
   dadataApiKey      String? // API-ключ DaData для валидации ниши
-vkServiceToken    String? // Сервисный токен VK для трендов ВКонтакте
+  vkServiceToken    String? // Сервисный токен VK для трендов ВКонтакте
   siteUrl           String? // Публичный URL сервиса (для ссылок в Telegram)
   // Этап 8: цепочка экспертов + автоматизация
   expertModel          String?                    // Отдельная модель для экспертов (#42)

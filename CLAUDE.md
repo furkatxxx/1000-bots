@@ -16,14 +16,17 @@
 - Next.js 16 + TypeScript + Tailwind CSS 4
 - Prisma 6 + SQLite
 - Claude API (Haiku) для генерации идей
-- Порт: 1000
+- Порт: 4000
+
+## Среда
+- Работает в GitHub Codespace (облако)
+- Раньше был на макбуке, перенесён в GitHub 2026-03-06
 
 ## Запуск
 ```bash
-export PATH="$HOME/.local/node/bin:$PATH"
 npm run dev
 ```
-Открыть: http://localhost:1000
+Открыть: http://localhost:4000 (или через Codespace forwarded port)
 
 ## Структура
 - `src/app/` — страницы и API-роуты

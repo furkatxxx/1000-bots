@@ -81,8 +81,6 @@
 
 ## Что запустить
 ```bash
-cd ~/Desktop/KLOUD/1000-bots
-export PATH="$HOME/.local/node/bin:$PATH"
 npm run dev
-# Открыть http://localhost:1000
+# Открыть http://localhost:4000
 ```

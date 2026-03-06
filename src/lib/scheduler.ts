@@ -7,7 +7,7 @@ let lastTriggeredDate: string | null = null; // Защита от повторн
 
 // Получить базовый URL для внутренних fetch-запросов
 function getBaseUrl(): string {
-  return `http://localhost:${process.env.PORT || 1000}`;
+  return `http://localhost:${process.env.PORT || 4000}`;
 }
 
 // Проверка: пора ли генерировать отчёт?

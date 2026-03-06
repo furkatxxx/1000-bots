@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 1000",
-    "build": "next build",
-    "start": "next start -p 1000",
+    "dev": "next dev --turbopack -p 4000",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && next build",
+    "start": "next start -p 4000",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:studio": "prisma studio"
