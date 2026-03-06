@@ -27,7 +27,9 @@ export default function DashboardPage() {
   const totalTrends = reports.reduce((sum, r) => sum + r.trendsCount, 0);
 
   async function handleGenerate(pwd?: string) {
-    const result = await generate(pwd);
+    // pwd может быть MouseEvent от onClick — игнорируем не-строки
+    const actualPwd = typeof pwd === "string" ? pwd : undefined;
+    const result = await generate(actualPwd);
     if (result?.needPassword) {
       setShowPasswordModal(true);
       return;
