@@ -227,28 +227,8 @@ export default function IdeaDetailPage({
                 {idea.expertAnalysis.finalVerdict === "launch" ? "Запускать" : idea.expertAnalysis.finalVerdict === "pivot" ? "Доработать" : "Отказаться"}
               </div>
             </div>
-          ) : idea.successChance != null ? (
-            <div
-              className="rounded-2xl p-4 text-center"
-              style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
-            >
-              <div className="mb-1 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
-                Шанс успеха <span className="opacity-50">(самооценка)</span>
-              </div>
-              <div className="text-2xl font-bold" style={{
-                color: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
-              }}>
-                {idea.successChance}%
-              </div>
-              <div className="mx-auto mt-2 h-1.5 w-full max-w-[80px] overflow-hidden rounded-full" style={{ backgroundColor: "var(--muted)" }}>
-                <div className="h-full rounded-full" style={{
-                  width: `${idea.successChance}%`,
-                  backgroundColor: idea.successChance >= 70 ? "var(--success)" : idea.successChance >= 40 ? "var(--warning)" : "var(--destructive)",
-                }} />
-              </div>
-            </div>
           ) : null}
-          {idea.estimatedRevenue && (
+          {idea.estimatedRevenue && idea.estimatedRevenue.trim() !== "" && (
             <div
               className="rounded-2xl p-4 text-center"
               style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
@@ -261,7 +241,7 @@ export default function IdeaDetailPage({
               </div>
             </div>
           )}
-          {idea.timeToLaunch && (
+          {idea.timeToLaunch && idea.timeToLaunch.trim() !== "" && (
             <div
               className="rounded-2xl p-4 text-center"
               style={{ backgroundColor: "var(--card)", boxShadow: "var(--shadow-sm)" }}
@@ -278,7 +258,28 @@ export default function IdeaDetailPage({
       )}
 
       {/* Описание — всегда видно */}
-      <InfoBlock title="Описание" content={idea.description} />
+      {(() => {
+        const validatorMatch = idea.description.match(/\[(?:⚠️\s*)?Замечание(?:\s*валидатора)?:\s*(.*?)\]$/);
+        const cleanDescription = validatorMatch ? idea.description.replace(validatorMatch[0], "").trim() : idea.description;
+        const validatorNote = validatorMatch ? validatorMatch[1] : null;
+        return (
+          <>
+            <InfoBlock title="Описание" content={cleanDescription} />
+            {validatorNote && (
+              <div
+                className="mt-3 rounded-2xl p-4"
+                style={{ backgroundColor: "var(--warning, #f59e0b)10", border: "1px solid var(--warning, #f59e0b)30" }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span>⚠️</span>
+                  <span className="text-sm font-semibold">Замечание валидатора</span>
+                </div>
+                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>{validatorNote}</p>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Сценарии по рынкам */}
       {idea.marketScenarios && (
@@ -306,12 +307,30 @@ export default function IdeaDetailPage({
 
         {detailsOpen && (
           <div className="mt-2 space-y-3 animate-fade-in">
-            <InfoBlock title="Целевая аудитория" content={idea.targetAudience} />
-            <InfoBlock title="Монетизация" content={idea.monetization} />
-            <InfoBlock title="Стоимость запуска" content={idea.startupCost} />
-            <InfoBlock title="Конкуренция" content={idea.competitionLevel} />
-            <InfoBlock title="Подтверждение трендами" content={idea.trendBacking} />
-            <InfoBlock title="План действий" content={idea.actionPlan} />
+            {idea.targetAudience && idea.targetAudience !== "Не указано" && (
+              <InfoBlock title="Целевая аудитория" content={idea.targetAudience} />
+            )}
+            {idea.monetization && idea.monetization !== "Не указано" && (
+              <InfoBlock title="Монетизация" content={idea.monetization} />
+            )}
+            <InfoBlock title="Стоимость запуска" content={
+              idea.startupCost === "low" ? "Низкая (до $500)" :
+              idea.startupCost === "medium" ? "Средняя ($500-2000)" :
+              idea.startupCost === "high" ? "Высокая (>$2000)" :
+              idea.startupCost
+            } />
+            <InfoBlock title="Конкуренция" content={
+              idea.competitionLevel === "low" ? "Низкая — мало конкурентов" :
+              idea.competitionLevel === "medium" ? "Средняя — рынок есть, но не перенасыщен" :
+              idea.competitionLevel === "high" ? "Высокая — много конкурентов" :
+              idea.competitionLevel
+            } />
+            {idea.trendBacking && idea.trendBacking.trim() !== "" && (
+              <InfoBlock title="Подтверждение трендами" content={idea.trendBacking} />
+            )}
+            {idea.actionPlan && idea.actionPlan.trim() !== "" && (
+              <InfoBlock title="План действий" content={idea.actionPlan} />
+            )}
           </div>
         )}
       </div>
@@ -639,7 +658,8 @@ function MarketScenariosBlock({ scenarios }: { scenarios: MarketScenarios }) {
   ];
 
   const allDefault = scenarioFields.every(
-    (f) => scenarios.russia[f.key] === "Не оценено" && scenarios.global[f.key] === "Не оценено"
+    (f) => (!scenarios.russia[f.key] || scenarios.russia[f.key] === "Не оценено" || scenarios.russia[f.key].trim() === "")
+      && (!scenarios.global[f.key] || scenarios.global[f.key] === "Не оценено" || scenarios.global[f.key].trim() === "")
   );
   if (allDefault) return null;
 

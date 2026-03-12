@@ -13,14 +13,20 @@ export async function GET(request: NextRequest) {
     const archived = url.searchParams.get("archived");
     const search = url.searchParams.get("search");
     const sort = url.searchParams.get("sort") || "date";
+    const verdict = url.searchParams.get("verdict");
+    const period = url.searchParams.get("period");
     const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 200);
     const offset = Number(url.searchParams.get("offset")) || 0;
 
     // Собираем фильтры
     const where: Record<string, unknown> = {};
 
-    if (market && ["russia", "global", "both"].includes(market)) {
-      where.market = market;
+    if (market === "russia") {
+      where.market = { in: ["russia", "both"] };
+    } else if (market === "global") {
+      where.market = { in: ["global", "both"] };
+    } else if (market === "both") {
+      where.market = "both";
     }
     if (difficulty && ["easy", "medium", "hard"].includes(difficulty)) {
       where.difficulty = difficulty;
@@ -40,13 +46,28 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    if (period === "today") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      where.createdAt = { gte: today };
+    } else if (period === "week") {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      where.createdAt = { gte: weekAgo };
+    } else if (period === "month") {
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      where.createdAt = { gte: monthAgo };
+    }
+
     // Только идеи из завершённых отчётов
     where.report = { status: "complete" };
 
     // Сортировка
     let orderBy: Record<string, string> = { createdAt: "desc" };
-    if (sort === "chance") orderBy = { successChance: "desc" };
     if (sort === "date") orderBy = { createdAt: "desc" };
+    if (sort === "name_asc") orderBy = { name: "asc" };
+    if (sort === "name_desc") orderBy = { name: "desc" };
 
     // Получаем идеи
     const [ideas, total] = await Promise.all([
@@ -93,6 +114,16 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Фильтр по вердикту экспертов (в памяти, т.к. это JSON-поле)
+    if (verdict === "launch" || verdict === "pivot" || verdict === "reject") {
+      mapped = mapped.filter((idea) => idea.expertAnalysis?.finalVerdict === verdict);
+    } else if (verdict === "none") {
+      mapped = mapped.filter((idea) => !idea.expertAnalysis);
+    }
+
+    // Пересчитываем total после фильтрации по вердикту
+    const filteredTotal = verdict && verdict !== "all" ? mapped.length : total;
+
     // Сортировка по экспертам (в памяти, т.к. это JSON-поле)
     if (sort === "expert") {
       mapped = mapped.sort((a, b) =>
@@ -102,7 +133,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ideas: mapped,
-      total,
+      total: filteredTotal ?? total,
       limit,
       offset,
     });

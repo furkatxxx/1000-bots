@@ -5,9 +5,11 @@ import { IdeaCard } from "@/components/ui/IdeaCard";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import type { IdeaDTO } from "@/lib/types";
 
-type SortBy = "date" | "expert" | "chance" | "revenue";
+type SortBy = "date" | "expert" | "name_asc" | "name_desc";
 type MarketFilter = "all" | "russia" | "global" | "both";
 type DifficultyFilter = "all" | "easy" | "medium" | "hard";
+type VerdictFilter = "all" | "launch" | "pivot" | "reject" | "none";
+type PeriodFilter = "all" | "today" | "week" | "month";
 
 const LIMIT = 20;
 
@@ -25,6 +27,8 @@ export default function AllIdeasPage() {
   const [difficulty, setDifficulty] = useState<DifficultyFilter>("all");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [verdict, setVerdict] = useState<VerdictFilter>("all");
+  const [period, setPeriod] = useState<PeriodFilter>("all");
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -39,9 +43,11 @@ export default function AllIdeasPage() {
       if (onlyFavorites) params.set("favorite", "true");
       if (showArchived) params.set("archived", "all");
       if (search.trim()) params.set("search", search.trim());
+      if (verdict !== "all") params.set("verdict", verdict);
+      if (period !== "all") params.set("period", period);
       return params.toString();
     },
-    [sort, market, difficulty, onlyFavorites, showArchived, search]
+    [sort, market, difficulty, onlyFavorites, showArchived, search, verdict, period]
   );
 
   const fetchIdeas = useCallback(
@@ -73,7 +79,7 @@ export default function AllIdeasPage() {
   // Загрузка при смене фильтров (кроме поиска — там debounce)
   useEffect(() => {
     fetchIdeas(0);
-  }, [sort, market, difficulty, onlyFavorites, showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sort, market, difficulty, onlyFavorites, showArchived, verdict, period]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce поиска
   useEffect(() => {
@@ -105,8 +111,8 @@ export default function AllIdeasPage() {
   const sortOptions: { value: SortBy; label: string }[] = [
     { value: "date", label: "Новые" },
     { value: "expert", label: "По экспертам ↓" },
-    { value: "chance", label: "По шансу ↓" },
-    { value: "revenue", label: "По доходу ↓" },
+    { value: "name_asc", label: "А-Я" },
+    { value: "name_desc", label: "Я-А" },
   ];
 
   const marketOptions: { value: MarketFilter; label: string }[] = [
@@ -122,6 +128,32 @@ export default function AllIdeasPage() {
     { value: "medium", label: "Средне" },
     { value: "hard", label: "Сложно" },
   ];
+
+  const verdictOptions: { value: VerdictFilter; label: string }[] = [
+    { value: "all", label: "Все" },
+    { value: "launch", label: "🟢 Запуск" },
+    { value: "pivot", label: "🟡 Доработка" },
+    { value: "reject", label: "🔴 Отказ" },
+    { value: "none", label: "Без оценки" },
+  ];
+
+  const periodOptions: { value: PeriodFilter; label: string }[] = [
+    { value: "all", label: "Всё время" },
+    { value: "today", label: "Сегодня" },
+    { value: "week", label: "Неделя" },
+    { value: "month", label: "Месяц" },
+  ];
+
+  function handleExport() {
+    const params = new URLSearchParams();
+    if (market !== "all") params.set("market", market);
+    if (difficulty !== "all") params.set("difficulty", difficulty);
+    if (verdict !== "all") params.set("verdict", verdict);
+    if (period !== "all") params.set("period", period);
+    if (onlyFavorites) params.set("favorite", "true");
+    if (search.trim()) params.set("search", search.trim());
+    window.open(`/api/ideas/export?${params.toString()}`, "_blank");
+  }
 
   return (
     <div className="mx-auto max-w-5xl animate-fade-in">
@@ -172,6 +204,20 @@ export default function AllIdeasPage() {
           onChange={(v) => setDifficulty(v as DifficultyFilter)}
         />
 
+        {/* Вердикт экспертов */}
+        <FilterGroup
+          options={verdictOptions}
+          value={verdict}
+          onChange={(v) => setVerdict(v as VerdictFilter)}
+        />
+
+        {/* Период */}
+        <FilterGroup
+          options={periodOptions}
+          value={period}
+          onChange={(v) => setPeriod(v as PeriodFilter)}
+        />
+
         {/* Избранное */}
         <button
           onClick={() => setOnlyFavorites(!onlyFavorites)}
@@ -195,6 +241,18 @@ export default function AllIdeasPage() {
           }}
         >
           📦 + Архив
+        </button>
+
+        {/* Экспорт */}
+        <button
+          onClick={handleExport}
+          className="cursor-pointer rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+          style={{
+            backgroundColor: "var(--muted)",
+            color: "var(--muted-foreground)",
+          }}
+        >
+          📥 Выгрузить .md
         </button>
       </div>
 
