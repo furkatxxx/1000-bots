@@ -2,23 +2,32 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { GenerationResult, GeneratedIdea, ExpertAnalysis, MarketScenarios, SkepticVerdict } from "./types";
 
 interface BrainInput {
-  trends: { title: string; score: number; source: string; category?: string }[];
+  trends: {
+    title: string;
+    score: number;
+    source: string;
+    category?: string;
+    summary?: string | null;
+    originalTitle?: string | null;
+    metadata?: Record<string, unknown>;
+  }[];
   maxIdeas: number;
   model: string;
   apiKey: string;
   previousIdeas?: string[];
+  trendAnalysis?: string;
 }
 
 // Вес источников: более надёжные получают приоритет
 const SOURCE_WEIGHTS: Record<string, number> = {
-  yandex_wordstat: 1.5,
-  google_trends: 1.3,
-  hacker_news: 1.3,
-  product_hunt: 1.3,
-  github_trending: 1.1,
-  reddit: 1.0,
-  news_api: 0.9,
-  vk_trends: 0.8,
+  yandex_wordstat: 2.0,  // Прямой спрос в РФ — самый ценный источник
+  product_hunt: 1.5,     // Реальные продукты с описаниями
+  reddit: 1.2,           // Бизнес-боли из целевых сабреддитов
+  google_trends: 1.0,    // Массовые тренды, средняя ценность
+  news_api: 0.6,         // Журналистика, низкая ценность для бизнес-идей
+  hacker_news: 0.7,      // Технический шум, мало про бизнес-боли
+  github_trending: 0.5,  // Open-source проекты, не про деньги
+  vk_trends: 0.5,        // Контент-маркетинг, низкая ценность
 };
 
 // ═══════════════════════════════════════════════════
@@ -49,9 +58,9 @@ const JUNK_CATEGORIES = new Set([
   "спорт", "развлечения", "игры",
 ]);
 
-export function filterTrends(
-  trends: { title: string; score: number; source: string; category?: string }[]
-): { title: string; score: number; source: string; category?: string }[] {
+export function filterTrends<T extends { title: string; score: number; source: string; category?: string }>(
+  trends: T[]
+): T[] {
   return trends.filter((t) => {
     if (t.category && JUNK_CATEGORIES.has(t.category.toLowerCase())) return false;
     return !JUNK_PATTERNS.some((pattern) => pattern.test(t.title));
@@ -134,6 +143,105 @@ ${summaries}
 }
 
 // ═══════════════════════════════════════════════════
+// СМЫСЛОВАЯ ВАЛИДАЦИЯ — проверка реалистичности (Opus)
+// ═══════════════════════════════════════════════════
+
+export async function validateIdeas(input: {
+  ideas: GeneratedIdea[];
+  apiKey: string;
+}): Promise<{ valid: GeneratedIdea[]; removed: number; tokensIn: number; tokensOut: number }> {
+  if (input.ideas.length === 0) {
+    return { valid: [], removed: 0, tokensIn: 0, tokensOut: 0 };
+  }
+
+  const client = new Anthropic({ apiKey: input.apiKey, timeout: 60_000 });
+
+  const summaries = input.ideas.map((idea, i) =>
+    `${i + 1}. "${idea.name}" — ${idea.description}\n   Аудитория: ${idea.targetAudience}\n   Монетизация: ${idea.monetization}`
+  ).join("\n\n");
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: `Ты — жёсткий скептик-инвестор. Проверь каждую бизнес-идею на реалистичность.
+
+Критерии ОТБРАКОВКИ (любой = выкинуть):
+- Невозможно сделать одному человеку за $500 и 2-4 недели
+- Нет конкретной аудитории которая заплатит (не "бизнес", а конкретный сегмент)
+- Есть десятки бесплатных аналогов и нет причины платить
+- Идея слишком абстрактная ("AI для чего-то")
+- Нереалистичные цифры дохода
+
+Для каждой идеи верни:
+- "keep" — реалистичная, оставить
+- "fix" — есть потенциал, но нужно исправить (укажи ЧТО)
+- "remove" — нереалистичная, выкинуть (укажи ПОЧЕМУ)
+
+Идеи:
+
+${summaries}
+
+Верни JSON-массив:
+[
+  { "index": 1, "verdict": "keep" },
+  { "index": 2, "verdict": "fix", "suggestion": "сузить аудиторию до..." },
+  { "index": 3, "verdict": "remove", "reason": "есть 50 бесплатных аналогов" }
+]
+
+Будь жёстким. Лучше пропустить 3 хороших чем оставить 1 мусорную. Только JSON, без markdown.`,
+      }],
+    });
+
+    const text = response.content.find(b => b.type === "text");
+    if (!text || text.type !== "text") {
+      return { valid: input.ideas, removed: 0, tokensIn: response.usage.input_tokens, tokensOut: response.usage.output_tokens };
+    }
+
+    const cleaned = text.text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return { valid: input.ideas, removed: 0, tokensIn: response.usage.input_tokens, tokensOut: response.usage.output_tokens };
+    }
+
+    const verdicts: { index: number; verdict: string; suggestion?: string; reason?: string }[] = JSON.parse(jsonMatch[0]);
+    const toRemove = new Set<number>();
+
+    for (const v of verdicts) {
+      if (v.verdict === "remove") {
+        const idx = v.index - 1;
+        if (idx >= 0 && idx < input.ideas.length) {
+          toRemove.add(idx);
+          console.log(`[Validation] "${input.ideas[idx].name}" — ${v.reason || "нереалистично"}`);
+        }
+      }
+      if (v.verdict === "fix" && v.suggestion) {
+        const idx = v.index - 1;
+        if (idx >= 0 && idx < input.ideas.length) {
+          console.log(`[Validation] "${input.ideas[idx].name}" — ${v.suggestion}`);
+          input.ideas[idx].description += ` [Замечание: ${v.suggestion}]`;
+        }
+      }
+    }
+
+    const valid = input.ideas.filter((_, i) => !toRemove.has(i));
+    console.log(`[Validation] Итог: ${input.ideas.length} → ${valid.length} (отбраковано ${toRemove.size})`);
+
+    return {
+      valid,
+      removed: toRemove.size,
+      tokensIn: response.usage.input_tokens,
+      tokensOut: response.usage.output_tokens,
+    };
+  } catch (error) {
+    console.warn("[Validation] Валидация не удалась:", error);
+    return { valid: input.ideas, removed: 0, tokensIn: 0, tokensOut: 0 };
+  }
+}
+
+// ═══════════════════════════════════════════════════
 // ЛЁГКИЙ ПРОМПТ — фокус на качестве, без примеров
 // ═══════════════════════════════════════════════════
 
@@ -148,18 +256,19 @@ const SYSTEM_PROMPT = `Ты — опытный бизнес-аналитик. А
 ## Правила:
 1. КОНКРЕТНОСТЬ: не "AI для бизнеса", а "бот для генерации описаний товаров на Wildberries по фото". Конкретная ниша, конкретный клиент, конкретная цена.
 2. ПРИВЯЗКА К ТРЕНДАМ: каждая идея привязана к тренду из списка. Объясни ПОЧЕМУ этот тренд = бизнес-возможность СЕЙЧАС.
-3. РАЗНООБРАЗИЕ: минимум 2 бота, 2 SaaS, 2 инструмента автоматизации. Минимум 3 для РФ, 3 для мира.
+3. РАЗНООБРАЗИЕ: разные типы продуктов (боты, SaaS, инструменты). Разные рынки (РФ и мировой). Не делай все идеи одного типа.
 4. РЕАЛИЗМ: один человек, ≤$500, запуск за 1-4 недели. Без физпроизводства, лицензий, найма.
-5. ЗАПРЕТ: соцсети, мессенджеры, маркетплейсы, общие идеи.
+5. ПЛАТФОРМЫ: не предлагай СОЗДАНИЕ новых соцсетей или маркетплейсов. Но инструменты и боты ДЛЯ существующих платформ (Telegram, Wildberries, Ozon, Instagram, WhatsApp) — приветствуются. Это лучшие ниши.
 6. ДУМАЙ ГЛУБОКО: не хватай первую очевидную идею от тренда. Тренд "рост AI" ≠ "сделай AI-помощника". Ищи НЕОЧЕВИДНЫЕ ниши и ПЕРЕСЕЧЕНИЯ трендов. Лучше 1 нестандартная идея, чем 3 банальных.
+7. БОЛЬ И ДЕНЬГИ: для каждой идеи чётко ответь — какую конкретную БОЛЬ людей ты решаешь? Почему они ЗАПЛАТЯТ, а не сделают сами или найдут бесплатный аналог?
 
 ## Формат — JSON-массив. Каждый объект:
 {
   "name": "Название (3-5 слов)",
   "emoji": "подходящий эмодзи",
   "description": "Что за продукт, кому, зачем, как работает. 2-3 конкретных предложения.",
-  "targetAudience": "Кто заплатит и сколько их (с цифрами)",
-  "monetization": "Модель дохода, конкретные цены, средний чек",
+  "targetAudience": "Кто заплатит, сколько их, где их найти (с цифрами)",
+  "monetization": "Модель дохода, конкретные цены, средний чек, почему заплатят а не найдут бесплатное",
   "whyNow": "КАКОЙ тренд из списка + ПОЧЕМУ он создаёт возможность именно сейчас",
   "difficulty": "easy | medium | hard",
   "market": "russia | global | both"
@@ -168,33 +277,47 @@ const SYSTEM_PROMPT = `Ты — опытный бизнес-аналитик. А
 Всё на русском. Суммы в рублях для РФ, в долларах для глобальных.`;
 
 function buildUserPrompt(input: BrainInput): string {
-  const trendLines = input.trends
+  const enrichedTrends = input.trends
     .map((t) => ({
       ...t,
       weightedScore: Math.round(t.score * (SOURCE_WEIGHTS[t.source] || 1.0)),
     }))
     .sort((a, b) => b.weightedScore - a.weightedScore)
-    .slice(0, 40)
-    .map((t) => `- [${t.source}] ${t.title} (${t.weightedScore})`)
+    .slice(0, 15);
+
+  const trendLines = enrichedTrends
+    .map((t) => {
+      const title = t.originalTitle || t.title;
+      let line = `- [${t.source}] ${title} (${t.weightedScore})`;
+      if (t.summary) {
+        line += `\n  Контекст: ${t.summary}`;
+      }
+      if (t.metadata?.monthlySearches) {
+        line += `\n  Спрос в Яндексе: ${Number(t.metadata.monthlySearches).toLocaleString("ru-RU")} запросов/мес`;
+      }
+      if (t.metadata?.stars) {
+        line += `\n  GitHub: ${Number(t.metadata.stars).toLocaleString()} звёзд`;
+      }
+      return line;
+    })
     .join("\n");
 
-  let prompt = `Тренды (отсортированы по важности):
+  let prompt = "";
 
-${trendLines}
-
-Предложи ${input.maxIdeas} КОНКРЕТНЫХ бизнес-идей на основе этих трендов.
-Думай глубоко. Ищи неочевидные ниши и пересечения трендов.`;
-
-  if (input.previousIdeas && input.previousIdeas.length > 0) {
-    prompt += `
-
-⛔ НЕ ПОВТОРЯЙ эти идеи:
-${input.previousIdeas.map((name) => `- ${name}`).join("\n")}`;
+  if (input.trendAnalysis) {
+    prompt += `## Анализ трендов (боли и возможности):\n\n${input.trendAnalysis}\n\n`;
+    prompt += `## Исходные тренды:\n\n${trendLines}\n\n`;
+    prompt += `На основе анализа болей предложи ${input.maxIdeas} КОНКРЕТНЫХ бизнес-идей.\nКаждая идея должна решать конкретную боль конкретных людей из анализа выше.`;
+  } else {
+    prompt += `Тренды (отсортированы по важности):\n\n${trendLines}\n\n`;
+    prompt += `Для каждого тренда сначала определи: какую БОЛЬ людей он отражает? Кто эти люди? За что они УЖЕ платят?\nЗатем предложи ${input.maxIdeas} КОНКРЕТНЫХ бизнес-идей.\nИщи неочевидные ниши и пересечения трендов.`;
   }
 
-  prompt += `
+  if (input.previousIdeas && input.previousIdeas.length > 0) {
+    prompt += `\n\n⛔ НЕ ПОВТОРЯЙ эти идеи:\n${input.previousIdeas.map((name) => `- ${name}`).join("\n")}`;
+  }
 
-Верни JSON-массив из ${input.maxIdeas} объектов. Только JSON, без markdown.`;
+  prompt += `\n\nВерни JSON-массив из ${input.maxIdeas} объектов. Только JSON, без markdown.`;
 
   return prompt;
 }
@@ -291,6 +414,75 @@ function parseIdeas(text: string): GeneratedIdea[] {
   }
 
   return ideas;
+}
+
+// ═══════════════════════════════════════════════════
+// ШАГ 1: АНАЛИЗ ТРЕНДОВ — выявление болей (Opus)
+// ═══════════════════════════════════════════════════
+
+const TREND_ANALYSIS_PROMPT = `Ты — эксперт по выявлению бизнес-возможностей. Твоя задача — проанализировать тренды и найти БОЛИ реальных людей, за решение которых они готовы платить.
+
+Для каждого тренда определи:
+1. БОЛЬ: Какую конкретную проблему испытывают люди? Не абстрактную, а ежедневную.
+2. КТО страдает: Конкретный сегмент (не "бизнес", а "селлеры на WB с 10-50 товарами")
+3. ДЕНЬГИ: За что они уже платят сейчас? Сколько? Какие есть платные решения?
+4. ДЫРА: Что не закрыто текущими решениями? Почему люди недовольны?
+5. ПЕРЕСЕЧЕНИЯ: Какие тренды усиливают друг друга?
+
+Формат ответа — JSON-массив:
+[
+  {
+    "trend": "название тренда",
+    "pain": "конкретная боль",
+    "who": "кто страдает (сегмент и размер)",
+    "currentSpend": "за что и сколько уже платят",
+    "gap": "что не закрыто",
+    "crosses": ["какие другие тренды усиливают"]
+  }
+]
+
+Будь конкретен. Не пиши "бизнесу нужна автоматизация". Пиши "селлеры на Wildberries тратят 3 часа в день на ручное обновление цен, платят 5-15 тыс руб/мес за MPStats, но он слишком сложный для мелких продавцов".
+Только JSON, без markdown.`;
+
+export async function analyzeTrends(input: {
+  trends: BrainInput["trends"];
+  apiKey: string;
+}): Promise<{ analysis: string; tokensIn: number; tokensOut: number }> {
+  const client = new Anthropic({ apiKey: input.apiKey, timeout: 5 * 60 * 1000 });
+
+  const enrichedTrends = input.trends
+    .slice(0, 15)
+    .map((t) => {
+      const title = t.originalTitle || t.title;
+      let line = `- [${t.source}] ${title}`;
+      if (t.summary) line += ` — ${t.summary}`;
+      if (t.metadata?.monthlySearches) {
+        line += ` (${Number(t.metadata.monthlySearches).toLocaleString("ru-RU")} запросов/мес в Яндексе)`;
+      }
+      return line;
+    })
+    .join("\n");
+
+  const response = await client.messages.create({
+    model: "claude-opus-4-6",
+    max_tokens: 8192,
+    system: TREND_ANALYSIS_PROMPT,
+    messages: [{
+      role: "user",
+      content: `Проанализируй эти тренды и найди бизнес-боли:\n\n${enrichedTrends}\n\nВерни JSON-массив. Только JSON, без markdown.`,
+    }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("AI не вернул текстовый ответ при анализе трендов");
+  }
+
+  return {
+    analysis: textBlock.text,
+    tokensIn: response.usage.input_tokens,
+    tokensOut: response.usage.output_tokens,
+  };
 }
 
 // Главная функция — генерация идей (один проход, без батчей)

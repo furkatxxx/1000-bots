@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
-import { generateIdeas, filterTrends, semanticDedup } from "@/lib/ai-brain";
+import { generateIdeas, filterTrends, semanticDedup, analyzeTrends, validateIdeas } from "@/lib/ai-brain";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
@@ -115,6 +115,9 @@ export async function GET(request: NextRequest) {
         score: t.score,
         source: t.sourceId,
         category: t.category || undefined,
+        summary: t.summary || undefined,
+        originalTitle: (t.metadata?.originalTitle as string) || undefined,
+        metadata: t.metadata || undefined,
       }));
       const filtered = filterTrends(trendData);
       const trendsForAI = filtered.length >= 5 ? filtered : trendData;
@@ -127,31 +130,51 @@ export async function GET(request: NextRequest) {
         take: 30,
       });
 
-      const generationModel = "claude-sonnet-4-6";
-      const expertModel = settings.expertModel || "claude-haiku-4-5-20251001";
+      const generationModel = "claude-opus-4-6";
+      const expertModel = settings.expertModel || "claude-sonnet-4-6";
       let totalTokensIn = 0;
       let totalTokensOut = 0;
 
-      // Шаг 3: Генерация идей
+      // Шаг 3а: Анализ трендов — выявление болей (Opus)
+      console.log("[Cron] Шаг 3а: Анализ трендов — выявление болей (Opus)...");
+      const analysisResult = await analyzeTrends({
+        trends: trendsForAI,
+        apiKey: settings.anthropicApiKey,
+      });
+      totalTokensIn += analysisResult.tokensIn;
+      totalTokensOut += analysisResult.tokensOut;
+
+      // Шаг 3б: Генерация идей на основе анализа (Opus)
+      console.log(`[Cron] Шаг 3б: Генерация 7 идей (${generationModel})...`);
       const genResult = await generateIdeas({
         trends: trendsForAI,
-        maxIdeas: 10,
+        maxIdeas: 7,
         model: generationModel,
         apiKey: settings.anthropicApiKey,
         previousIdeas: recentIdeas.map((i) => i.name),
+        trendAnalysis: analysisResult.analysis,
       });
       totalTokensIn += genResult.tokensIn;
       totalTokensOut += genResult.tokensOut;
 
-      // Шаг 4: Семантическая дедупликация
+      // Шаг 4: Семантическая дедупликация (Sonnet)
       const dedupResult = await semanticDedup({
         ideas: genResult.ideas,
         apiKey: settings.anthropicApiKey,
-        model: expertModel,
+        model: "claude-sonnet-4-6",
       });
       totalTokensIn += dedupResult.tokensIn;
       totalTokensOut += dedupResult.tokensOut;
-      const finalIdeas = dedupResult.unique;
+
+      // Шаг 5: Смысловая валидация (Opus)
+      console.log("[Cron] Шаг 5: Смысловая валидация (Opus)...");
+      const validationResult = await validateIdeas({
+        ideas: dedupResult.unique,
+        apiKey: settings.anthropicApiKey,
+      });
+      totalTokensIn += validationResult.tokensIn;
+      totalTokensOut += validationResult.tokensOut;
+      const finalIdeas = validationResult.valid;
 
       // Шаг 5: Сохранение
       await prisma.businessIdea.deleteMany({ where: { reportId: report.id } });

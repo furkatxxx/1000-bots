@@ -71,12 +71,13 @@ if (enabled.includes("vk_trends") && config.vkServiceToken) {
     }
   }
 
-  // Переводим заголовки на русский
+  // Переводим заголовки на русский, сохраняя оригинал для AI
   if (items.length > 0) {
     try {
       const titles = items.map((i) => i.title);
       const translated = await translateToRussian(titles);
       for (let i = 0; i < items.length; i++) {
+        items[i].metadata = { ...items[i].metadata, originalTitle: items[i].title };
         items[i].title = translated[i] || items[i].title;
       }
     } catch (err) {

@@ -3,7 +3,7 @@ import { detectCategory } from "./base";
 import { fetchWithTimeout, concurrentMap } from "@/lib/utils";
 
 const HN_API = "https://hacker-news.firebaseio.com/v0";
-const TOP_STORIES_LIMIT = 30;
+const TOP_STORIES_LIMIT = 15;
 
 interface HNStory {
   id: number;

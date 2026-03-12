@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
-import { generateIdeas, filterTrends, semanticDedup } from "@/lib/ai-brain";
+import { generateIdeas, filterTrends, semanticDedup, analyzeTrends, validateIdeas } from "@/lib/ai-brain";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
@@ -13,7 +13,7 @@ export const maxDuration = 300;
 
 // Дедлайн: 2026-03-07 12:00 МСК (09:00 UTC)
 const LOCK_AFTER = new Date("2026-03-07T09:00:00Z");
-const GENERATE_PASSWORD = "0811";
+const GENERATE_PASSWORD = process.env.GENERATE_PASSWORD || "";
 
 // GET /api/reports — список всех отчётов
 export async function GET() {
@@ -173,6 +173,9 @@ export async function POST(request: NextRequest) {
       score: t.score,
       source: t.sourceId,
       category: t.category || undefined,
+      summary: t.summary || undefined,
+      originalTitle: (t.metadata?.originalTitle as string) || undefined,
+      metadata: t.metadata || undefined,
     }));
 
     const filtered = filterTrends(trendData);
@@ -193,39 +196,64 @@ export async function POST(request: NextRequest) {
     const previousIdeas = recentIdeas.map((i) => i.name);
 
     // Модели: Sonnet для генерации, Haiku для экспертов
-    const generationModel = "claude-sonnet-4-6";
-    const expertModel = settings.expertModel || "claude-haiku-4-5-20251001";
+    const generationModel = "claude-opus-4-6";
+    const expertModel = settings.expertModel || "claude-sonnet-4-6";
     let totalTokensIn = 0;
     let totalTokensOut = 0;
 
     // ═══════════════════════════════════════════════════
-    // ШАГ 3: ГЕНЕРАЦИЯ 10 ИДЕЙ (Sonnet, один проход)
+    // ШАГ 3а: АНАЛИЗ ТРЕНДОВ — выявление болей (Opus)
     // ═══════════════════════════════════════════════════
-    console.log(`[Gen] Шаг 3: Генерация 10 идей (${generationModel})...`);
+    console.log("[Gen] Шаг 3а: Анализ трендов — выявление болей (Opus)...");
+    const analysisResult = await analyzeTrends({
+      trends: trendsForAI,
+      apiKey: settings.anthropicApiKey,
+    });
+    totalTokensIn += analysisResult.tokensIn;
+    totalTokensOut += analysisResult.tokensOut;
+    console.log(`[Gen] Анализ трендов завершён`);
+
+    // ═══════════════════════════════════════════════════
+    // ШАГ 3б: ГЕНЕРАЦИЯ ИДЕЙ на основе анализа (Opus)
+    // ═══════════════════════════════════════════════════
+    console.log(`[Gen] Шаг 3б: Генерация 7 идей на основе анализа (${generationModel})...`);
     const genResult = await generateIdeas({
       trends: trendsForAI,
-      maxIdeas: 10,
+      maxIdeas: 7,
       model: generationModel,
       apiKey: settings.anthropicApiKey,
       previousIdeas,
+      trendAnalysis: analysisResult.analysis,
     });
     totalTokensIn += genResult.tokensIn;
     totalTokensOut += genResult.tokensOut;
     console.log(`[Gen] Сгенерировано: ${genResult.ideas.length} идей`);
 
     // ═══════════════════════════════════════════════════
-    // ШАГ 4: СЕМАНТИЧЕСКАЯ ДЕДУПЛИКАЦИЯ
+    // ШАГ 4: СЕМАНТИЧЕСКАЯ ДЕДУПЛИКАЦИЯ (Sonnet)
     // ═══════════════════════════════════════════════════
-    console.log("[Gen] Шаг 4: Семантическая дедупликация...");
+    console.log("[Gen] Шаг 4: Семантическая дедупликация (Sonnet)...");
     const dedupResult = await semanticDedup({
       ideas: genResult.ideas,
       apiKey: settings.anthropicApiKey,
-      model: expertModel,
+      model: "claude-sonnet-4-6",
     });
     totalTokensIn += dedupResult.tokensIn;
     totalTokensOut += dedupResult.tokensOut;
-    const finalIdeas = dedupResult.unique;
-    console.log(`[Gen] После дедупликации: ${finalIdeas.length} уникальных идей`);
+    console.log(`[Gen] После дедупликации: ${dedupResult.unique.length} уникальных идей`);
+
+    // ═══════════════════════════════════════════════════
+    // ШАГ 5: СМЫСЛОВАЯ ВАЛИДАЦИЯ (Opus)
+    // ═══════════════════════════════════════════════════
+    console.log("[Gen] Шаг 5: Смысловая валидация (Opus)...");
+    const validationResult = await validateIdeas({
+      ideas: dedupResult.unique,
+      apiKey: settings.anthropicApiKey,
+    });
+    totalTokensIn += validationResult.tokensIn;
+    totalTokensOut += validationResult.tokensOut;
+    const finalIdeas = validationResult.valid;
+    console.log(`[Gen] После валидации: ${finalIdeas.length} реалистичных идей`);
 
     // ═══════════════════════════════════════════════════
     // ШАГ 5: СОХРАНЕНИЕ В БД
@@ -257,8 +285,9 @@ export async function POST(request: NextRequest) {
     // ШАГ 6: ФИНАЛИЗАЦИЯ (экспертов запустит фронтенд отдельно)
     // ═══════════════════════════════════════════════════
     console.log(`[Gen] ═══ ИТОГ ═══`);
-    console.log(`[Gen] Тренды: ${trendItems.length} собрано, ${trendsForAI.length} после фильтра`);
-    console.log(`[Gen] Идеи: ${genResult.ideas.length} → ${finalIdeas.length} (после дедупа)`);
+    console.log(`[Gen] Тренды: ${trendItems.length} собрано → ${trendsForAI.length} после фильтра`);
+    console.log(`[Gen] Идеи: ${genResult.ideas.length} сгенерировано → ${dedupResult.unique.length} после дедупа → ${finalIdeas.length} после валидации`);
+    console.log(`[Gen] Модели: Opus (анализ + генерация + валидация), Sonnet (дедупликация)`);
     console.log(`[Gen] Токены: ${totalTokensIn} in, ${totalTokensOut} out`);
 
     const updated = await prisma.dailyReport.update({

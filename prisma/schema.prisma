@@ -114,7 +114,7 @@ model Settings {
   anthropicApiKey   String?
   newsApiKey        String?
   wordstatToken     String? // OAuth-токен Яндекс Вордстат
-  googleTrendsGeo   String @default("US")
+  googleTrendsGeo   String @default("RU")
   maxIdeasPerReport Int    @default(10)
   preferredModel    String @default("claude-haiku-4-5-20251001")
   telegramBotToken  String? // Токен Telegram-бота

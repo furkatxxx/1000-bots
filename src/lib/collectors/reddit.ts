@@ -5,11 +5,11 @@ import { fetchWithTimeout } from "@/lib/utils";
 // Reddit — парсим публичные Atom-фиды популярных подреддитов (без API-ключа)
 
 const SUBREDDITS = [
-  { name: "technology", weight: 1.0 },
-  { name: "startups", weight: 1.2 },
-  { name: "SideProject", weight: 1.3 },
-  { name: "Entrepreneur", weight: 1.2 },
-  { name: "artificial", weight: 1.1 },
+  { name: "microsaas", weight: 1.5 },       // Реальные микро-бизнесы, цифры выручки
+  { name: "indiehackers", weight: 1.4 },     // Соло-предприниматели, конкретные кейсы
+  { name: "Entrepreneur", weight: 1.2 },     // Бизнес-вопросы и боли
+  { name: "SideProject", weight: 1.1 },      // Люди показывают проекты — видно что востребовано
+  { name: "slavelabour", weight: 1.3 },      // Люди платят за конкретные задачи — прямой спрос
 ];
 
 export class RedditCollector implements TrendCollector {
