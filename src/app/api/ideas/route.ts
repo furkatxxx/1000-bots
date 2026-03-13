@@ -63,9 +63,10 @@ export async function GET(request: NextRequest) {
     // Только идеи из завершённых отчётов
     where.report = { status: "complete" };
 
-    // Сортировка
+    // Сортировка (тогл: field_dir)
     let orderBy: Record<string, string> = { createdAt: "desc" };
-    if (sort === "date") orderBy = { createdAt: "desc" };
+    if (sort === "date" || sort === "date_desc") orderBy = { createdAt: "desc" };
+    if (sort === "date_asc") orderBy = { createdAt: "asc" };
     if (sort === "name_asc") orderBy = { name: "asc" };
     if (sort === "name_desc") orderBy = { name: "desc" };
 
@@ -125,9 +126,13 @@ export async function GET(request: NextRequest) {
     const filteredTotal = verdict && verdict !== "all" ? mapped.length : total;
 
     // Сортировка по экспертам (в памяти, т.к. это JSON-поле)
-    if (sort === "expert") {
+    if (sort === "expert" || sort === "expert_desc") {
       mapped = mapped.sort((a, b) =>
         (b.expertAnalysis?.finalScore || 0) - (a.expertAnalysis?.finalScore || 0)
+      );
+    } else if (sort === "expert_asc") {
+      mapped = mapped.sort((a, b) =>
+        (a.expertAnalysis?.finalScore || 0) - (b.expertAnalysis?.finalScore || 0)
       );
     }
 

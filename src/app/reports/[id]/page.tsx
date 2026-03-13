@@ -7,9 +7,18 @@ import { IdeaCard } from "@/components/ui/IdeaCard";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import type { IdeaDTO } from "@/lib/types";
 
-type SortBy = "chance" | "revenue" | "difficulty" | "expert" | "default";
+type SortField = "default" | "expert" | "revenue" | "difficulty";
+type SortDir = "asc" | "desc";
 type ViewMode = "cards" | "list";
 type MarketFilter = "all" | "russia" | "global";
+
+// Направление по умолчанию
+const DEFAULT_SORT_DIR: Record<SortField, SortDir> = {
+  default: "desc",
+  expert: "desc",     // Сначала высокий балл
+  revenue: "desc",    // Сначала высокий доход
+  difficulty: "asc",  // Сначала лёгкие
+};
 
 export default function ReportDetailPage({
   params,
@@ -18,9 +27,24 @@ export default function ReportDetailPage({
 }) {
   const { id } = use(params);
   const { report, setReport, loading, error } = useReport(id);
-  const [sortBy, setSortBy] = useState<SortBy>("default");
+  const [sortField, setSortField] = useState<SortField>("default");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
+
+  function handleSortToggle(field: SortField) {
+    if (field === "default") {
+      setSortField("default");
+      setSortDir("desc");
+      return;
+    }
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(DEFAULT_SORT_DIR[field]);
+    }
+  }
 
   async function handleToggleFavorite(ideaId: string, isFavorite: boolean) {
     // Оптимистичное обновление — звёздочка меняется мгновенно, без перезагрузки
@@ -49,15 +73,28 @@ export default function ReportDetailPage({
       ideas = ideas.filter((i) => i.market === marketFilter || i.market === "both");
     }
 
-    if (sortBy === "chance") ideas.sort((a, b) => (b.successChance || 0) - (a.successChance || 0));
-    if (sortBy === "expert") ideas.sort((a, b) => (b.expertAnalysis?.finalScore || 0) - (a.expertAnalysis?.finalScore || 0));
-    if (sortBy === "revenue") ideas.sort((a, b) => parseRevenue(b.estimatedRevenue) - parseRevenue(a.estimatedRevenue));
-    if (sortBy === "difficulty") {
+    // Тогл-сортировка с направлением
+    if (sortField === "expert") {
+      ideas.sort((a, b) => {
+        const diff = (a.expertAnalysis?.finalScore || 0) - (b.expertAnalysis?.finalScore || 0);
+        return sortDir === "desc" ? -diff : diff;
+      });
+    }
+    if (sortField === "revenue") {
+      ideas.sort((a, b) => {
+        const diff = parseRevenue(a.estimatedRevenue) - parseRevenue(b.estimatedRevenue);
+        return sortDir === "desc" ? -diff : diff;
+      });
+    }
+    if (sortField === "difficulty") {
       const order: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
-      ideas.sort((a, b) => (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1));
+      ideas.sort((a, b) => {
+        const diff = (order[a.difficulty] ?? 1) - (order[b.difficulty] ?? 1);
+        return sortDir === "asc" ? diff : -diff;
+      });
     }
     return ideas;
-  }, [report, sortBy, marketFilter]);
+  }, [report, sortField, sortDir, marketFilter]);
 
   if (loading) {
     return (
@@ -83,12 +120,11 @@ export default function ReportDetailPage({
   const date = new Date(report.date);
   const formattedDate = date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 
-  const sortOptions: { value: SortBy; label: string }[] = [
-    { value: "default", label: "По умолчанию" },
-    { value: "expert", label: "По экспертам ↓" },
-    { value: "chance", label: "По шансу ↓" },
-    { value: "revenue", label: "По доходу ↓" },
-    { value: "difficulty", label: "По сложности" },
+  const sortButtons: { field: SortField; label: string }[] = [
+    { field: "default", label: "Все" },
+    { field: "expert", label: "Эксперты" },
+    { field: "revenue", label: "Доход" },
+    { field: "difficulty", label: "Сложность" },
   ];
 
   return (
@@ -118,22 +154,28 @@ export default function ReportDetailPage({
       {report.ideas.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-            {/* Сортировка */}
+            {/* Сортировка — тогл-кнопки */}
             <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
-              {sortOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setSortBy(opt.value)}
-                  className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-                  style={{
-                    backgroundColor: sortBy === opt.value ? "var(--card)" : "transparent",
-                    color: sortBy === opt.value ? "var(--foreground)" : "var(--muted-foreground)",
-                    boxShadow: sortBy === opt.value ? "var(--shadow-sm)" : "none",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {sortButtons.map((opt) => {
+                const isActive = sortField === opt.field;
+                const arrow = isActive && opt.field !== "default"
+                  ? (sortDir === "desc" ? " ↓" : " ↑")
+                  : "";
+                return (
+                  <button
+                    key={opt.field}
+                    onClick={() => handleSortToggle(opt.field)}
+                    className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap"
+                    style={{
+                      backgroundColor: isActive ? "var(--card)" : "transparent",
+                      color: isActive ? "var(--foreground)" : "var(--muted-foreground)",
+                      boxShadow: isActive ? "var(--shadow-sm)" : "none",
+                    }}
+                  >
+                    {opt.label}{arrow}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Фильтр по рынку */}

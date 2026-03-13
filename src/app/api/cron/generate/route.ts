@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
 import { generateIdeas, filterTrends, semanticDedup, analyzeTrends, validateIdeas } from "@/lib/ai-brain";
-import { expertChain } from "@/lib/expert-chain";
-import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
@@ -133,7 +131,6 @@ export async function GET(request: NextRequest) {
       });
 
       const generationModel = "claude-opus-4-6";
-      const expertModel = settings.expertModel || "claude-sonnet-4-6";
       let totalTokensIn = 0;
       let totalTokensOut = 0;
 
@@ -202,60 +199,7 @@ export async function GET(request: NextRequest) {
         })),
       });
 
-      // Шаг 7: Экспертный совет для каждой идеи (Sonnet)
-      console.log("[Cron] Шаг 7: Экспертный совет для каждой идеи (Sonnet)...");
-      const savedIdeas = await prisma.businessIdea.findMany({
-        where: { reportId: report.id },
-        select: { id: true, name: true, description: true, targetAudience: true, monetization: true, startupCost: true, competitionLevel: true, actionPlan: true, estimatedRevenue: true, trendBacking: true },
-      });
-
-      let expertsDone = 0;
-      for (const idea of savedIdeas) {
-        try {
-          console.log(`  [Expert] ${expertsDone + 1}/${savedIdeas.length}: "${idea.name}"...`);
-
-          const validationData = await collectValidationData({
-            ideaName: idea.name,
-            ideaDescription: idea.description,
-            targetAudience: idea.targetAudience,
-            wordstatToken: settings.wordstatToken || undefined,
-            dadataApiKey: settings.dadataApiKey || undefined,
-          });
-          const validationContext = formatValidationForPrompt(validationData);
-
-          const expertResult = await expertChain({
-            idea: {
-              name: idea.name,
-              description: idea.description,
-              targetAudience: idea.targetAudience,
-              monetization: idea.monetization,
-              startupCost: idea.startupCost,
-              competitionLevel: idea.competitionLevel,
-              actionPlan: idea.actionPlan,
-              estimatedRevenue: idea.estimatedRevenue,
-              trendBacking: idea.trendBacking,
-            },
-            apiKey: settings.anthropicApiKey,
-            model: expertModel,
-            validationContext: validationContext || undefined,
-          });
-
-          await prisma.businessIdea.update({
-            where: { id: idea.id },
-            data: { expertAnalysis: JSON.stringify(expertResult.analysis) },
-          });
-
-          totalTokensIn += expertResult.tokensIn;
-          totalTokensOut += expertResult.tokensOut;
-          expertsDone++;
-          console.log(`  [Expert] "${idea.name}": ${expertResult.analysis.finalScore}/10 → ${expertResult.analysis.finalVerdict}`);
-        } catch (err) {
-          console.error(`  [Expert] Ошибка для "${idea.name}":`, err);
-        }
-      }
-      console.log(`[Cron] Экспертный совет: ${expertsDone}/${savedIdeas.length} идей оценены`);
-
-      // Шаг 8: Финализация
+      // Шаг 7: Финализация (эксперты запустятся отдельным кроном /api/cron/experts)
       await prisma.dailyReport.update({
         where: { id: report.id },
         data: {

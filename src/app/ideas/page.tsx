@@ -5,11 +5,19 @@ import { IdeaCard } from "@/components/ui/IdeaCard";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import type { IdeaDTO } from "@/lib/types";
 
-type SortBy = "date" | "expert" | "name_asc" | "name_desc";
+type SortField = "date" | "expert" | "name";
+type SortDir = "asc" | "desc";
 type MarketFilter = "all" | "russia" | "global" | "both";
 type DifficultyFilter = "all" | "easy" | "medium" | "hard";
 type VerdictFilter = "all" | "launch" | "pivot" | "reject" | "none";
 type PeriodFilter = "all" | "today" | "week" | "month";
+
+// Направление по умолчанию для каждого поля
+const DEFAULT_SORT_DIR: Record<SortField, SortDir> = {
+  date: "desc",   // Сначала новые
+  expert: "desc",  // Сначала высокий балл
+  name: "asc",     // А-Я
+};
 
 const LIMIT = 20;
 
@@ -22,7 +30,8 @@ export default function AllIdeasPage() {
 
   // Фильтры
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortBy>("date");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [market, setMarket] = useState<MarketFilter>("all");
   const [difficulty, setDifficulty] = useState<DifficultyFilter>("all");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -32,10 +41,12 @@ export default function AllIdeasPage() {
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const sortParam = `${sortField}_${sortDir}`;
+
   const buildQuery = useCallback(
     (off: number) => {
       const params = new URLSearchParams();
-      params.set("sort", sort);
+      params.set("sort", sortParam);
       params.set("limit", String(LIMIT));
       params.set("offset", String(off));
       if (market !== "all") params.set("market", market);
@@ -47,7 +58,7 @@ export default function AllIdeasPage() {
       if (period !== "all") params.set("period", period);
       return params.toString();
     },
-    [sort, market, difficulty, onlyFavorites, showArchived, search, verdict, period]
+    [sortParam, market, difficulty, onlyFavorites, showArchived, search, verdict, period]
   );
 
   const fetchIdeas = useCallback(
@@ -79,7 +90,7 @@ export default function AllIdeasPage() {
   // Загрузка при смене фильтров (кроме поиска — там debounce)
   useEffect(() => {
     fetchIdeas(0);
-  }, [sort, market, difficulty, onlyFavorites, showArchived, verdict, period]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sortField, sortDir, market, difficulty, onlyFavorites, showArchived, verdict, period]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce поиска
   useEffect(() => {
@@ -108,11 +119,20 @@ export default function AllIdeasPage() {
 
   const hasMore = ideas.length < total;
 
-  const sortOptions: { value: SortBy; label: string }[] = [
-    { value: "date", label: "Новые" },
-    { value: "expert", label: "По экспертам ↓" },
-    { value: "name_asc", label: "А-Я" },
-    { value: "name_desc", label: "Я-А" },
+  // Тогл-сортировка: клик = выбрать, повторный клик = сменить направление
+  function handleSortToggle(field: SortField) {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(DEFAULT_SORT_DIR[field]);
+    }
+  }
+
+  const sortButtons: { field: SortField; label: string }[] = [
+    { field: "date", label: "Дата" },
+    { field: "expert", label: "Эксперты" },
+    { field: "name", label: "Имя" },
   ];
 
   const marketOptions: { value: MarketFilter; label: string }[] = [
@@ -183,12 +203,27 @@ export default function AllIdeasPage() {
 
       {/* Фильтры */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        {/* Сортировка */}
-        <FilterGroup
-          options={sortOptions}
-          value={sort}
-          onChange={(v) => setSort(v as SortBy)}
-        />
+        {/* Сортировка — тогл-кнопки */}
+        <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--muted)" }}>
+          {sortButtons.map((opt) => {
+            const isActive = sortField === opt.field;
+            const arrow = isActive ? (sortDir === "desc" ? " ↓" : " ↑") : "";
+            return (
+              <button
+                key={opt.field}
+                onClick={() => handleSortToggle(opt.field)}
+                className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: isActive ? "var(--card)" : "transparent",
+                  color: isActive ? "var(--foreground)" : "var(--muted-foreground)",
+                  boxShadow: isActive ? "var(--shadow-sm)" : "none",
+                }}
+              >
+                {opt.label}{arrow}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Рынок */}
         <FilterGroup

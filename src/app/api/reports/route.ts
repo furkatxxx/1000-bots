@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
 import { generateIdeas, filterTrends, semanticDedup, analyzeTrends, validateIdeas } from "@/lib/ai-brain";
-import { expertChain } from "@/lib/expert-chain";
-import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
@@ -197,9 +195,7 @@ export async function POST(request: NextRequest) {
     });
     const previousIdeas = recentIdeas.map((i) => i.name);
 
-    // Модели: Sonnet для генерации, Haiku для экспертов
     const generationModel = "claude-opus-4-6";
-    const expertModel = settings.expertModel || "claude-sonnet-4-6";
     let totalTokensIn = 0;
     let totalTokensOut = 0;
 
@@ -284,72 +280,13 @@ export async function POST(request: NextRequest) {
     });
 
     // ═══════════════════════════════════════════════════
-    // ШАГ 7: ЭКСПЕРТНЫЙ СОВЕТ для каждой идеи (Sonnet)
-    // ═══════════════════════════════════════════════════
-    console.log("[Gen] Шаг 7: Экспертный совет для каждой идеи (Sonnet)...");
-    const savedIdeas = await prisma.businessIdea.findMany({
-      where: { reportId: report.id },
-      select: { id: true, name: true, description: true, targetAudience: true, monetization: true, startupCost: true, competitionLevel: true, actionPlan: true, estimatedRevenue: true, trendBacking: true },
-    });
-
-    let expertsDone = 0;
-    for (const idea of savedIdeas) {
-      try {
-        console.log(`  [Expert] ${expertsDone + 1}/${savedIdeas.length}: "${idea.name}"...`);
-
-        // Собираем данные валидации (Вордстат, DaData, ЕГРЮЛ)
-        const validationData = await collectValidationData({
-          ideaName: idea.name,
-          ideaDescription: idea.description,
-          targetAudience: idea.targetAudience,
-          wordstatToken: settings.wordstatToken || undefined,
-          dadataApiKey: settings.dadataApiKey || undefined,
-        });
-        const validationContext = formatValidationForPrompt(validationData);
-
-        // Запускаем цепочку экспертов
-        const expertResult = await expertChain({
-          idea: {
-            name: idea.name,
-            description: idea.description,
-            targetAudience: idea.targetAudience,
-            monetization: idea.monetization,
-            startupCost: idea.startupCost,
-            competitionLevel: idea.competitionLevel,
-            actionPlan: idea.actionPlan,
-            estimatedRevenue: idea.estimatedRevenue,
-            trendBacking: idea.trendBacking,
-          },
-          apiKey: settings.anthropicApiKey,
-          model: expertModel,
-          validationContext: validationContext || undefined,
-        });
-
-        // Сохраняем результат
-        await prisma.businessIdea.update({
-          where: { id: idea.id },
-          data: { expertAnalysis: JSON.stringify(expertResult.analysis) },
-        });
-
-        totalTokensIn += expertResult.tokensIn;
-        totalTokensOut += expertResult.tokensOut;
-        expertsDone++;
-        console.log(`  [Expert] "${idea.name}": ${expertResult.analysis.finalScore}/10 → ${expertResult.analysis.finalVerdict}`);
-      } catch (err) {
-        console.error(`  [Expert] Ошибка для "${idea.name}":`, err);
-        // Продолжаем с остальными идеями
-      }
-    }
-    console.log(`[Gen] Экспертный совет: ${expertsDone}/${savedIdeas.length} идей оценены`);
-
-    // ═══════════════════════════════════════════════════
-    // ШАГ 8: ФИНАЛИЗАЦИЯ
+    // ШАГ 7: ФИНАЛИЗАЦИЯ (экспертов запустит крон или UI)
     // ═══════════════════════════════════════════════════
     console.log(`[Gen] ═══ ИТОГ ═══`);
     console.log(`[Gen] Тренды: ${trendItems.length} собрано → ${trendsForAI.length} после фильтра`);
     console.log(`[Gen] Идеи: ${genResult.ideas.length} сгенерировано → ${dedupResult.unique.length} после дедупа → ${finalIdeas.length} после валидации`);
-    console.log(`[Gen] Эксперты: ${expertsDone}/${savedIdeas.length} оценены (Sonnet)`);
     console.log(`[Gen] Токены: ${totalTokensIn} in, ${totalTokensOut} out`);
+    console.log(`[Gen] Экспертная оценка будет запущена отдельно (крон или кнопка)`);
 
     const updated = await prisma.dailyReport.update({
       where: { id: report.id },

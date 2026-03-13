@@ -16,13 +16,13 @@ interface TodayReportProps {
 }
 
 // Этапы генерации с примерным временем (секунды)
+// Экспертная оценка запускается отдельно через крон
 const GENERATION_STEPS = [
   { label: "Собираю тренды из источников", from: 0, emoji: "📡" },
   { label: "Анализирую и группирую тренды", from: 15, emoji: "🔍" },
   { label: "Генерирую бизнес-идеи через AI", from: 30, emoji: "🧠" },
-  { label: "Запускаю цепочку экспертов", from: 70, emoji: "👨‍⚖️" },
-  { label: "Эксперты оценивают каждую идею", from: 120, emoji: "📊" },
-  { label: "Финализирую отчёт", from: 300, emoji: "✅" },
+  { label: "Дедупликация и валидация", from: 70, emoji: "🔄" },
+  { label: "Финализирую отчёт", from: 100, emoji: "✅" },
 ];
 
 function getCurrentStep(elapsed: number) {
@@ -77,7 +77,7 @@ export const TodayReport = React.memo(function TodayReport({
   if (phase === "generating") {
     const step = getCurrentStep(elapsed);
     // Прогресс-бар: ~5 минут = 300 секунд
-    const progress = Math.min((elapsed / 330) * 100, 95);
+    const progress = Math.min((elapsed / 150) * 100, 95);
 
     return (
       <Card>
@@ -119,7 +119,7 @@ export const TodayReport = React.memo(function TodayReport({
 
         {/* Таймер */}
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Прошло {formatTime(elapsed)} · обычно занимает ~5 минут
+          Прошло {formatTime(elapsed)} · обычно занимает ~2 минуты
         </p>
 
         {/* Подэтапы */}
@@ -274,7 +274,7 @@ export const TodayReport = React.memo(function TodayReport({
         </div>
         <h3 className="mb-2 text-lg font-semibold">Генерирую отчёт...</h3>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Идёт генерация. Обычно занимает ~5 минут.
+          Идёт генерация. Обычно занимает ~2 минуты.
           Обновите страницу через пару минут.
         </p>
       </Card>
