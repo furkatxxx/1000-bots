@@ -216,20 +216,10 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      // Автоотправка в Telegram
-      if (settings.scheduleAutoTelegram && settings.telegramBotToken && settings.telegramChatId) {
-        try {
-          const baseUrl = process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : `http://localhost:${process.env.PORT || 4000}`;
-          await fetchWithTimeout(`${baseUrl}/api/telegram/send-top`, { method: "POST" });
-          console.log("[Cron] ТОП отправлен в Telegram");
-        } catch (tgErr) {
-          console.error("[Cron] Ошибка отправки в Telegram:", tgErr);
-        }
-      }
+      // Telegram НЕ отправляем тут — идеи ещё не оценены экспертами
+      // Отправка будет из /api/cron/experts после оценки всех идей
 
-      console.log(`[Cron] Отчёт создан: ${finalIdeas.length} идей`);
+      console.log(`[Cron] Отчёт создан: ${finalIdeas.length} идей (эксперты оценят в 9:00 МСК)`);
       return NextResponse.json({
         success: true,
         ideasCount: finalIdeas.length,

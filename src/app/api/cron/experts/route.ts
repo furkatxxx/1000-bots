@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { expertChain } from "@/lib/expert-chain";
 import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
+import { fetchWithTimeout } from "@/lib/utils";
 
 export const maxDuration = 300;
 
@@ -110,6 +111,19 @@ export async function GET(request: NextRequest) {
         const msg = err instanceof Error ? err.message : "Ошибка";
         console.error(`[Cron Experts] Ошибка для "${idea.name}":`, err);
         errors.push({ name: idea.name, error: msg });
+      }
+    }
+
+    // Автоотправка в Telegram после оценки всех идей
+    if (results.length > 0 && settings.scheduleAutoTelegram && settings.telegramBotToken && settings.telegramChatId) {
+      try {
+        const baseUrl = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : `http://localhost:${process.env.PORT || 4000}`;
+        await fetchWithTimeout(`${baseUrl}/api/telegram/send-top`, { method: "POST" });
+        console.log("[Cron Experts] ТОП отправлен в Telegram");
+      } catch (tgErr) {
+        console.error("[Cron Experts] Ошибка отправки в Telegram:", tgErr);
       }
     }
 

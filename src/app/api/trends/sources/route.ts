@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 const ALL_SOURCES = [
-  { name: "hacker_news", label: "Hacker News" },
   { name: "google_trends", label: "Google Trends" },
-  { name: "news_api", label: "NewsAPI" },
-  { name: "github_trending", label: "GitHub Trending" },
-  { name: "product_hunt", label: "Product Hunt" },
   { name: "yandex_wordstat", label: "Яндекс Вордстат" },
   { name: "vk_trends", label: "VK Тренды" },
+  { name: "reddit", label: "Reddit" },
 ];
 
 // GET /api/trends/sources — список источников с их состоянием

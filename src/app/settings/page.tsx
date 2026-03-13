@@ -38,13 +38,10 @@ export default function SettingsPage() {
   const [scheduleAutoTelegram, setScheduleAutoTelegram] = useState(false);
   const [focusPresets, setFocusPresets] = useState<PresetId[]>([]);
   const [sources, setSources] = useState<Record<string, boolean>>({
-    hacker_news: true,
     google_trends: true,
-    news_api: true,
-    github_trending: true,
-    product_hunt: true,
     yandex_wordstat: true,
-    vk_trends: false,
+    vk_trends: true,
+    reddit: true,
   });
 
   // Заполняем форму когда настройки загрузились
@@ -475,13 +472,10 @@ export default function SettingsPage() {
 
         <div className="mb-6 space-y-3">
           {[
-            { key: "hacker_news", label: "Hacker News", desc: "Технологии, стартапы, программирование" },
+            { key: "google_trends", label: "Google Trends", desc: "Поисковые тренды Google (регион настраивается выше)" },
             { key: "yandex_wordstat", label: "Яндекс Вордстат", desc: "Поисковые тренды рунета — реальный спрос в РФ (нужен токен)" },
-            { key: "github_trending", label: "GitHub Trending", desc: "Новые популярные репозитории — AI, SaaS, инструменты" },
-            { key: "product_hunt", label: "Product Hunt", desc: "Новые стартапы и продукты каждый день" },
-            { key: "google_trends", label: "Google Trends", desc: "Популярные поисковые запросы (глобально)" },
-            { key: "news_api", label: "NewsAPI", desc: "Новости и статьи (нужен ключ)" },
-            { key: "vk_trends", label: "VK Тренды", desc: "Популярные посты ВКонтакте (нужен сервисный токен)" },
+            { key: "vk_trends", label: "VK Тренды", desc: "Популярные посты ВКонтакте — что обсуждают (нужен сервисный токен)" },
+            { key: "reddit", label: "Reddit", desc: "r/microsaas, r/indiehackers — реальные кейсы и MRR" },
           ].map((source) => (
             <label
               key={source.key}

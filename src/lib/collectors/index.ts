@@ -22,11 +22,10 @@ interface CollectorConfig {
 // Собрать тренды из всех включённых источников
 export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> {
   const enabled = config.enabledSources || [
-    "hacker_news",
     "google_trends",
-    "news_api",
-    "github_trending",
-    "product_hunt",
+    "yandex_wordstat",
+    "vk_trends",
+    "reddit",
   ];
 
   const collectors = [];

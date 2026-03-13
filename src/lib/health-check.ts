@@ -33,11 +33,7 @@ export interface HealthCheckSettings {
 
 // Названия источников на русском
 export const SOURCE_LABELS: Record<string, string> = {
-  hacker_news: "Hacker News",
   google_trends: "Google Trends",
-  news_api: "NewsAPI",
-  github_trending: "GitHub Trending",
-  product_hunt: "Product Hunt",
   reddit: "Reddit",
   yandex_wordstat: "Яндекс Вордстат",
   vk_trends: "VK Тренды",
@@ -75,25 +71,13 @@ export async function runHealthCheck(
 ): Promise<HealthCheckResult> {
   const checks: Promise<SourceCheck>[] = [];
 
-  // 1. Hacker News (без ключа)
-  checks.push(
-    checkSource("hacker_news", "Hacker News", async () => {
-      const r = await fetchWithTimeout(
-        "https://hacker-news.firebaseio.com/v0/topstories.json"
-      );
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const ids = await r.json();
-      return Array.isArray(ids) ? ids.length : 0;
-    })
-  );
-
-  // 2. Google Trends (без ключа)
+  // 1. Google Trends (без ключа)
   checks.push(
     checkSource("google_trends", "Google Trends", async () => {
-      const geo = settings.googleTrendsGeo || "US";
+      const geo = settings.googleTrendsGeo || "RU";
       const r = await fetchWithTimeout(
         `https://trends.google.com/trending/rss?geo=${geo}`,
-        { headers: { "User-Agent": "1000bots/1.0" } }
+        { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }
       );
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const xml = await r.text();
@@ -101,58 +85,11 @@ export async function runHealthCheck(
     })
   );
 
-  // 3. NewsAPI (нужен ключ)
-  if (settings.newsApiKey) {
-    checks.push(
-      checkSource("news_api", "NewsAPI", async () => {
-        const r = await fetchWithTimeout(
-          `https://newsapi.org/v2/top-headlines?country=us&pageSize=3&apiKey=${settings.newsApiKey}`
-        );
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const d = await r.json();
-        return d.articles ? d.articles.length : 0;
-      })
-    );
-  }
-
-  // 4. GitHub Trending (без ключа)
-  checks.push(
-    checkSource("github_trending", "GitHub Trending", async () => {
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const dateStr = weekAgo.toISOString().split("T")[0];
-      const r = await fetchWithTimeout(
-        `https://api.github.com/search/repositories?q=created:>${dateStr}&sort=stars&per_page=3`,
-        {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-            "User-Agent": "1000bots/1.0",
-          },
-        }
-      );
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      return d.items ? d.items.length : 0;
-    })
-  );
-
-  // 5. Product Hunt (без ключа)
-  checks.push(
-    checkSource("product_hunt", "Product Hunt", async () => {
-      const r = await fetchWithTimeout("https://www.producthunt.com/feed", {
-        headers: { "User-Agent": "1000bots/1.0" },
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const xml = await r.text();
-      return (xml.match(/<entry>/g) || []).length;
-    })
-  );
-
-  // 6. Reddit (без ключа)
+  // 2. Reddit (без ключа)
   checks.push(
     checkSource("reddit", "Reddit", async () => {
       const r = await fetchWithTimeout(
-        "https://www.reddit.com/r/technology/hot.rss",
+        "https://www.reddit.com/r/microsaas/hot.rss",
         {
           headers: {
             "User-Agent":
@@ -166,7 +103,7 @@ export async function runHealthCheck(
     })
   );
 
-  // 7. VK Тренды (нужен ключ)
+  // 3. VK Тренды (нужен ключ)
   if (settings.vkServiceToken) {
     checks.push(
       checkSource("vk_trends", "VK Тренды", async () => {
@@ -180,7 +117,7 @@ export async function runHealthCheck(
     );
   }
 
-  // 8. Яндекс Вордстат (нужен ключ)
+  // 4. Яндекс Вордстат (нужен ключ)
   if (settings.wordstatToken) {
     checks.push(
       checkSource("yandex_wordstat", "Яндекс Вордстат", async () => {
