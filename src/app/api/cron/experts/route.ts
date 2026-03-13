@@ -21,10 +21,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ skipped: true, reason: "Нет API-ключа" });
     }
 
-    // Ищем идею без экспертной оценки из завершённых отчётов
+    // Ищем идею без экспертной оценки ТОЛЬКО из сегодняшнего отчёта
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const idea = await prisma.businessIdea.findFirst({
       where: {
-        report: { status: "complete" },
+        report: { status: "complete", date: { gte: today } },
         expertAnalysis: null,
       },
       select: {
