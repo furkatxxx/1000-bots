@@ -8,6 +8,7 @@ import {
   isHealthyEnough,
   SOURCE_LABELS,
 } from "@/lib/health-check";
+import { parsePresets } from "@/lib/focus-presets";
 
 export const maxDuration = 300;
 
@@ -214,7 +215,8 @@ export async function POST(request: NextRequest) {
     // ═══════════════════════════════════════════════════
     // ШАГ 3б: ГЕНЕРАЦИЯ ИДЕЙ на основе анализа (Opus)
     // ═══════════════════════════════════════════════════
-    console.log(`[Gen] Шаг 3б: Генерация 7 идей на основе анализа (${generationModel})...`);
+    const focusPresets = parsePresets(settings.focusPresets);
+    console.log(`[Gen] Шаг 3б: Генерация 7 идей на основе анализа (${generationModel}, фокус: ${focusPresets.length > 0 ? focusPresets.join("+") : "универсальный"})...`);
     const genResult = await generateIdeas({
       trends: trendsForAI,
       maxIdeas: 7,
@@ -222,6 +224,7 @@ export async function POST(request: NextRequest) {
       apiKey: settings.anthropicApiKey,
       previousIdeas,
       trendAnalysis: analysisResult.analysis,
+      focusPresets,
     });
     totalTokensIn += genResult.tokensIn;
     totalTokensOut += genResult.tokensOut;

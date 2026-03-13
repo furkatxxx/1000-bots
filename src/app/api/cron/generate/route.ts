@@ -8,6 +8,7 @@ import {
   isHealthyEnough,
 } from "@/lib/health-check";
 import { fetchWithTimeout } from "@/lib/utils";
+import { parsePresets } from "@/lib/focus-presets";
 
 export const maxDuration = 300;
 
@@ -144,7 +145,8 @@ export async function GET(request: NextRequest) {
       totalTokensOut += analysisResult.tokensOut;
 
       // Шаг 3б: Генерация идей на основе анализа (Opus)
-      console.log(`[Cron] Шаг 3б: Генерация 7 идей (${generationModel})...`);
+      const focusPresets = parsePresets(settings.focusPresets);
+      console.log(`[Cron] Шаг 3б: Генерация 7 идей (${generationModel}, фокус: ${focusPresets.length > 0 ? focusPresets.join("+") : "универсальный"})...`);
       const genResult = await generateIdeas({
         trends: trendsForAI,
         maxIdeas: 7,
@@ -152,6 +154,7 @@ export async function GET(request: NextRequest) {
         apiKey: settings.anthropicApiKey,
         previousIdeas: recentIdeas.map((i) => i.name),
         trendAnalysis: analysisResult.analysis,
+        focusPresets,
       });
       totalTokensIn += genResult.tokensIn;
       totalTokensOut += genResult.tokensOut;

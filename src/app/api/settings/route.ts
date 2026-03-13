@@ -83,6 +83,18 @@ export async function POST(request: Request) {
       data.scheduleAutoTelegram = body.scheduleAutoTelegram;
     }
 
+    // Пресеты фокуса генерации
+    if (typeof body.focusPresets === "string") {
+      try {
+        const parsed = JSON.parse(body.focusPresets);
+        if (Array.isArray(parsed) && parsed.length <= 3) {
+          data.focusPresets = body.focusPresets;
+        }
+      } catch {
+        // Невалидный JSON — игнорируем
+      }
+    }
+
     const settings = await prisma.settings.upsert({
       where: { id: "main" },
       update: data,
@@ -113,6 +125,7 @@ function maskKeys(settings: Record<string, unknown>) {
     scheduleEnabled: settings.scheduleEnabled ?? false,
     scheduleTime: (settings.scheduleTime as string) || "08:00",
     scheduleAutoTelegram: settings.scheduleAutoTelegram ?? false,
+    focusPresets: (settings.focusPresets as string) || "[]",
   };
 }
 

@@ -127,4 +127,6 @@ model Settings {
   scheduleEnabled      Boolean @default(false)    // Включить автогенерацию по расписанию (#40)
   scheduleTime         String  @default("08:00")  // Время генерации HH:MM (#40)
   scheduleAutoTelegram Boolean @default(false)    // Автоотправка в Telegram после генерации (#40)
+  // Пресеты фокуса генерации
+  focusPresets         String  @default("[]")     // JSON-массив: ["marketplace","telegram"] (макс 3)
 }

@@ -18,6 +18,7 @@ interface Settings {
   scheduleEnabled: boolean;
   scheduleTime: string;
   scheduleAutoTelegram: boolean;
+  focusPresets: string;
 }
 
 export function useSettings() {

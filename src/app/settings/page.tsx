@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { useToast } from "@/components/ui/Toast";
 import { ScheduleSection } from "@/components/settings/ScheduleSection";
+import { FocusPresetsSection } from "@/components/settings/FocusPresetsSection";
+import { parsePresets, type PresetId } from "@/lib/focus-presets";
 
 interface BalanceResult {
   service: string;
@@ -34,6 +36,7 @@ export default function SettingsPage() {
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleTime, setScheduleTime] = useState("08:00");
   const [scheduleAutoTelegram, setScheduleAutoTelegram] = useState(false);
+  const [focusPresets, setFocusPresets] = useState<PresetId[]>([]);
   const [sources, setSources] = useState<Record<string, boolean>>({
     hacker_news: true,
     google_trends: true,
@@ -62,6 +65,7 @@ export default function SettingsPage() {
       setScheduleEnabled(settings.scheduleEnabled ?? false);
       setScheduleTime(settings.scheduleTime || "08:00");
       setScheduleAutoTelegram(settings.scheduleAutoTelegram ?? false);
+      setFocusPresets(parsePresets(settings.focusPresets));
     }
   }, [settings]);
 
@@ -124,6 +128,7 @@ export default function SettingsPage() {
     updates.scheduleEnabled = scheduleEnabled;
     updates.scheduleTime = scheduleTime;
     updates.scheduleAutoTelegram = scheduleAutoTelegram;
+    updates.focusPresets = JSON.stringify(focusPresets);
 
     const ok = await save(updates);
     if (ok) {
@@ -333,6 +338,9 @@ export default function SettingsPage() {
             {" "}→ сервисный ключ
           </p>
         </div>
+
+        {/* Фокус генерации */}
+        <FocusPresetsSection selected={focusPresets} onChange={setFocusPresets} />
 
         {/* Telegram */}
         <h2 className="mb-4 text-lg font-semibold">Telegram-уведомления</h2>
