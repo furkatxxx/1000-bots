@@ -327,7 +327,14 @@ export async function expertChain(input: ExpertChainInput): Promise<{
     clampScore(Number(financierData.score) || 5),
     clampScore(Number(skepticData.score) || 5),
   ];
-  const avgScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+  let avgScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+
+  // Cap rule: если скептик нашёл серьёзные проблемы (< 5), ограничиваем потолок
+  const skepticScore = clampScore(Number(skepticData.score) || 5);
+  if (skepticScore < 5) {
+    avgScore = Math.min(avgScore, Math.round((skepticScore + 2) * 10) / 10);
+  }
+
   const finalScore = Number(moderatorData.finalScore) || avgScore;
 
   let finalVerdict: "launch" | "pivot" | "reject";
