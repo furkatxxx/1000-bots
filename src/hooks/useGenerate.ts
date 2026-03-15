@@ -34,8 +34,8 @@ interface GenerateResult {
   healthCheck?: HealthCheckDTO;
 }
 
-// Фазы генерации: проверка источников → генерация → готово
-export type GeneratePhase = "idle" | "checking" | "generating";
+// Фазы генерации: проверка → 3 этапа pipeline → готово
+export type GeneratePhase = "idle" | "checking" | "stage-1" | "stage-2" | "stage-3";
 
 // Минимальный процент работающих источников (синхронизирован с бэкендом)
 const MIN_HEALTHY_PERCENT = 60;
@@ -50,14 +50,14 @@ export function useGenerate() {
 
   // Таймер прошедшего времени — тикает каждую секунду пока идёт генерация
   useEffect(() => {
-    if (phase === "generating") {
+    if (phase !== "idle") {
       setElapsed(0);
       timerRef.current = setInterval(() => {
         setElapsed((prev) => prev + 1);
       }, 1000);
     } else {
       clearInterval(timerRef.current);
-      if (phase === "idle") setElapsed(0);
+      setElapsed(0);
     }
     return () => clearInterval(timerRef.current);
   }, [phase]);
@@ -82,7 +82,6 @@ export function useGenerate() {
           : 0;
 
       if (healthyPercent < MIN_HEALTHY_PERCENT) {
-        // Слишком мало источников — отменяем
         setHealthCheck(healthData);
 
         const failedNames = healthData.results
@@ -93,7 +92,6 @@ export function useGenerate() {
         const msg = `Работают только ${healthData.working} из ${healthData.total} источников. Не работают: ${failedNames}`;
         setError(msg);
 
-        // Дублируем в Telegram (POST вместо GET)
         try {
           await fetch("/api/health/sources", { method: "POST" });
         } catch {
@@ -104,41 +102,73 @@ export function useGenerate() {
       }
 
       // ═══════════════════════════════════════════
-      // ФАЗА 2: Генерируем отчёт
+      // ЭТАП 1: Сбор трендов + анализ болей (Opus)
       // ═══════════════════════════════════════════
-      setPhase("generating");
+      setPhase("stage-1");
 
-      const fetchOpts: RequestInit = {
+      const stage1Body: Record<string, string> = {};
+      if (password) stage1Body.password = password;
+
+      const s1Res = await fetch("/api/pipeline/stage-1", {
         method: "POST",
-        ...(password ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password }),
-        } : {}),
-      };
-      const res = await fetch("/api/reports", fetchOpts);
-      const data = await res.json();
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(stage1Body),
+      });
+      const s1Data = await s1Res.json();
 
-      if (!res.ok || !data.success) {
-        const msg = data.error || "Ошибка генерации";
-        setError(msg);
-
-        if (data.needPassword) {
-          return { success: false, error: msg, needPassword: true };
+      if (!s1Res.ok || !s1Data.success) {
+        if (s1Data.needPassword) {
+          return { success: false, error: s1Data.error, needPassword: true };
         }
-
-        if (data.healthCheck) {
-          setHealthCheck(data.healthCheck);
+        if (s1Data.healthCheck) {
+          setHealthCheck(s1Data.healthCheck);
         }
+        setError(s1Data.error || "Ошибка этапа 1");
+        return { success: false, error: s1Data.error, healthCheck: s1Data.healthCheck };
+      }
 
-        return { success: false, error: msg, healthCheck: data.healthCheck };
+      const reportId = s1Data.reportId;
+
+      // ═══════════════════════════════════════════
+      // ЭТАП 2: Генерация идей (Opus) + дедуп (Sonnet)
+      // ═══════════════════════════════════════════
+      setPhase("stage-2");
+
+      const s2Res = await fetch("/api/pipeline/stage-2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId }),
+      });
+      const s2Data = await s2Res.json();
+
+      if (!s2Res.ok || !s2Data.success) {
+        setError(s2Data.error || "Ошибка этапа 2");
+        return { success: false, error: s2Data.error };
+      }
+
+      // ═══════════════════════════════════════════
+      // ЭТАП 3: Валидация (Opus) + финализация
+      // ═══════════════════════════════════════════
+      setPhase("stage-3");
+
+      const s3Res = await fetch("/api/pipeline/stage-3", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId }),
+      });
+      const s3Data = await s3Res.json();
+
+      if (!s3Res.ok || !s3Data.success) {
+        setError(s3Data.error || "Ошибка этапа 3");
+        return { success: false, error: s3Data.error };
       }
 
       return {
         success: true,
         report: {
-          id: data.report.id,
-          ideasCount: data.report.ideasCount,
-          trendsCount: data.report.trendsCount,
+          id: reportId,
+          ideasCount: s3Data.validCount,
+          trendsCount: s1Data.trendsCount,
         },
       };
     } catch (e) {

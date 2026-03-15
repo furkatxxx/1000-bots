@@ -15,22 +15,18 @@ interface TodayReportProps {
   onResetError: () => void;
 }
 
-// Этапы генерации с примерным временем (секунды)
-// Экспертная оценка запускается отдельно через крон
-const GENERATION_STEPS = [
-  { label: "Собираю тренды из источников", from: 0, emoji: "📡" },
-  { label: "Анализирую и группирую тренды", from: 15, emoji: "🔍" },
-  { label: "Генерирую бизнес-идеи через AI", from: 30, emoji: "🧠" },
-  { label: "Дедупликация и валидация", from: 70, emoji: "🔄" },
-  { label: "Финализирую отчёт", from: 100, emoji: "✅" },
+// 3 реальных этапа pipeline
+const PIPELINE_STAGES = [
+  { key: "stage-1" as const, label: "Сбор и анализ трендов", emoji: "📡" },
+  { key: "stage-2" as const, label: "Генерация бизнес-идей", emoji: "🧠" },
+  { key: "stage-3" as const, label: "Валидация и финализация", emoji: "✅" },
 ];
 
-function getCurrentStep(elapsed: number) {
-  let step = GENERATION_STEPS[0];
-  for (const s of GENERATION_STEPS) {
-    if (elapsed >= s.from) step = s;
-  }
-  return step;
+function getStageIndex(phase: GeneratePhase): number {
+  if (phase === "stage-1") return 0;
+  if (phase === "stage-2") return 1;
+  if (phase === "stage-3") return 2;
+  return -1;
 }
 
 function formatTime(seconds: number): string {
@@ -73,11 +69,10 @@ export const TodayReport = React.memo(function TodayReport({
     );
   }
 
-  // ─── Фаза: генерируем отчёт (с прогрессом) ───
-  if (phase === "generating") {
-    const step = getCurrentStep(elapsed);
-    // Прогресс-бар: ~5 минут = 300 секунд
-    const progress = Math.min((elapsed / 150) * 100, 95);
+  // ─── Фаза: генерируем отчёт (3 этапа с реальным прогрессом) ───
+  if (phase === "stage-1" || phase === "stage-2" || phase === "stage-3") {
+    const currentIdx = getStageIndex(phase);
+    const progress = ((currentIdx + 0.5) / PIPELINE_STAGES.length) * 100;
 
     return (
       <Card>
@@ -99,8 +94,8 @@ export const TodayReport = React.memo(function TodayReport({
           className="mb-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium"
           style={{ backgroundColor: "var(--muted)" }}
         >
-          <span>{step.emoji}</span>
-          <span>{step.label}</span>
+          <span>{PIPELINE_STAGES[currentIdx].emoji}</span>
+          <span>{PIPELINE_STAGES[currentIdx].label}</span>
         </div>
 
         {/* Прогресс-бар */}
@@ -119,17 +114,17 @@ export const TodayReport = React.memo(function TodayReport({
 
         {/* Таймер */}
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Прошло {formatTime(elapsed)} · обычно занимает ~2 минуты
+          Прошло {formatTime(elapsed)} · обычно занимает ~3 минуты
         </p>
 
         {/* Подэтапы */}
         <div className="mt-4 space-y-1">
-          {GENERATION_STEPS.map((s, i) => {
-            const isDone = elapsed >= (GENERATION_STEPS[i + 1]?.from ?? Infinity);
-            const isCurrent = s === step && !isDone;
+          {PIPELINE_STAGES.map((s, i) => {
+            const isDone = i < currentIdx;
+            const isCurrent = i === currentIdx;
             return (
               <div
-                key={s.label}
+                key={s.key}
                 className="flex items-center gap-2 text-xs"
                 style={{
                   color: isDone
@@ -274,7 +269,7 @@ export const TodayReport = React.memo(function TodayReport({
         </div>
         <h3 className="mb-2 text-lg font-semibold">Генерирую отчёт...</h3>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Идёт генерация. Обычно занимает ~2 минуты.
+          Идёт генерация. Обычно занимает ~3 минуты.
           Обновите страницу через пару минут.
         </p>
       </Card>

@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Автоотправка в Telegram после оценки всех идей
-    if (results.length > 0 && settings.scheduleAutoTelegram && settings.telegramBotToken && settings.telegramChatId) {
+    if (results.length > 0 && settings.telegramBotToken && settings.telegramChatId) {
       try {
         const baseUrl = process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
