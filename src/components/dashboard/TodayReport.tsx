@@ -254,6 +254,32 @@ export const TodayReport = React.memo(function TodayReport({
 
   // ─── Отчёт генерируется (из БД — например при перезагрузке страницы) ───
   if (report.status === "generating") {
+    // Проверяем: не застряла ли генерация (больше 10 минут)
+    const startedAt = report.generatedAt || report.createdAt;
+    const elapsedMs = Date.now() - new Date(startedAt).getTime();
+    const isStuck = elapsedMs > 10 * 60 * 1000;
+
+    if (isStuck) {
+      return (
+        <Card>
+          <div className="mb-4 text-5xl">⚠️</div>
+          <h3 className="mb-2 text-lg font-semibold">Генерация зависла</h3>
+          <p
+            className="mb-6 text-sm"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            Прошлая генерация не завершилась. Нажми кнопку, чтобы
+            попробовать снова.
+          </p>
+          <GenerateButton
+            onClick={onGenerate}
+            disabled={generating}
+            label="Попробовать снова"
+          />
+        </Card>
+      );
+    }
+
     return (
       <Card>
         <div className="mb-4 flex justify-center">
