@@ -133,6 +133,7 @@ export interface ExpertChainStep {
 export interface IdeaDTO {
   id: string;
   reportId: string;
+  reportDate: string;
   name: string;
   emoji: string;
   description: string;

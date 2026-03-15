@@ -53,6 +53,11 @@ export const IdeaCard = React.memo(function IdeaCard({
               <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: "var(--muted)" }}>
                 {idea.market === "russia" ? "🇷🇺" : idea.market === "global" ? "🌍" : "🇷🇺🌍"}
               </span>
+              {idea.reportDate && (
+                <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+                  {new Date(idea.reportDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                </span>
+              )}
             </div>
           </div>
         </div>

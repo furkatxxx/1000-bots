@@ -83,7 +83,10 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const idea = await prisma.businessIdea.findUnique({ where: { id } });
+    const idea = await prisma.businessIdea.findUnique({
+      where: { id },
+      include: { report: { select: { date: true } } },
+    });
 
     if (!idea) {
       return NextResponse.json(
@@ -105,6 +108,7 @@ export async function GET(
     return NextResponse.json({
       idea: {
         ...idea,
+        reportDate: idea.report.date.toISOString(),
         expertAnalysis,
         marketScenarios,
         // Не передаём тяжёлые данные целиком — только флаги наличия

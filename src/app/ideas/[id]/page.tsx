@@ -166,6 +166,11 @@ export default function IdeaDetailPage({
                   Можно собрать в коде
                 </span>
               )}
+              {idea.reportDate && (
+                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  {new Date(idea.reportDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                </span>
+              )}
             </div>
           </div>
         </div>
