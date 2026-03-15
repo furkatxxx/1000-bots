@@ -114,17 +114,26 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Автоотправка в Telegram после оценки всех идей
-    if (results.length > 0 && settings.telegramBotToken && settings.telegramChatId) {
+    // Автоотправка в Telegram — только когда ВСЕ идеи оценены (не осталось неоценённых)
+    const remaining = await prisma.businessIdea.count({
+      where: {
+        report: { status: "complete", date: { gte: today } },
+        expertAnalysis: null,
+      },
+    });
+
+    if (results.length > 0 && remaining === 0 && settings.telegramBotToken && settings.telegramChatId) {
       try {
         const baseUrl = process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
           : `http://localhost:${process.env.PORT || 4000}`;
         await fetchWithTimeout(`${baseUrl}/api/telegram/send-top`, { method: "POST" });
-        console.log("[Cron Experts] ТОП отправлен в Telegram");
+        console.log("[Cron Experts] Все идеи оценены — ТОП отправлен в Telegram");
       } catch (tgErr) {
         console.error("[Cron Experts] Ошибка отправки в Telegram:", tgErr);
       }
+    } else if (remaining > 0) {
+      console.log(`[Cron Experts] Осталось ${remaining} неоценённых — Telegram ждёт`);
     }
 
     return NextResponse.json({
