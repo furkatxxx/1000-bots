@@ -60,6 +60,12 @@ export async function GET(request: NextRequest) {
       where.createdAt = { gte: monthAgo };
     }
 
+    // Статус пользователя
+    const userStatus = url.searchParams.get("userStatus");
+    if (userStatus && ["new", "interesting", "in_progress", "rejected"].includes(userStatus)) {
+      where.userStatus = userStatus;
+    }
+
     // Только идеи из завершённых отчётов
     where.report = { status: "complete" };
 
@@ -108,6 +114,7 @@ export async function GET(request: NextRequest) {
         timeToLaunch: idea.timeToLaunch,
         market: idea.market,
         expertAnalysis,
+        userStatus: idea.userStatus,
         rating: idea.rating,
         isFavorite: idea.isFavorite,
         isArchived: idea.isArchived,

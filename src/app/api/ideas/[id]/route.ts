@@ -38,6 +38,9 @@ export async function PATCH(
     if (typeof body.isArchived === "boolean") {
       data.isArchived = body.isArchived;
     }
+    if (typeof body.userStatus === "string" && ["new", "interesting", "in_progress", "rejected"].includes(body.userStatus)) {
+      data.userStatus = body.userStatus;
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(

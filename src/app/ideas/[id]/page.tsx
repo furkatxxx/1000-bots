@@ -183,6 +183,40 @@ export default function IdeaDetailPage({
         </button>
       </div>
 
+      {/* Статус идеи */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Статус:</span>
+        {([
+          { value: "new", label: "Новая", color: "var(--muted)", textColor: "var(--muted-foreground)" },
+          { value: "interesting", label: "Интересно", color: "var(--primary)", textColor: "#fff" },
+          { value: "in_progress", label: "В работе", color: "var(--success)", textColor: "#fff" },
+          { value: "rejected", label: "Отброшена", color: "var(--destructive)", textColor: "#fff" },
+        ] as const).map((opt) => (
+          <button
+            key={opt.value}
+            onClick={async () => {
+              const res = await fetch(`/api/ideas/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userStatus: opt.value }),
+              });
+              if (res.ok) {
+                const data = await res.json();
+                setIdea(data.idea);
+              }
+            }}
+            className="cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all"
+            style={{
+              backgroundColor: idea.userStatus === opt.value ? opt.color : "var(--muted)",
+              color: idea.userStatus === opt.value ? opt.textColor : "var(--muted-foreground)",
+              opacity: idea.userStatus === opt.value ? 1 : 0.6,
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Рейтинг */}
       <div className="mb-6 flex items-center gap-1">
         {[1, 2, 3, 4, 5].map((star) => (

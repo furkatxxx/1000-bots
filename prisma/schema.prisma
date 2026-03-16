@@ -81,6 +81,7 @@ model BusinessIdea {
   landingHtml      String?     // HTML лендинга для проверки спроса (#33)
   marketAnalysis   String?     // JSON: TAM/SAM/SOM + SEO-анализ (#34, #35)
   adCopy           String?     // JSON: тексты для рекламы (#36)
+  userStatus       String      @default("new") // new, interesting, in_progress, rejected
   rating           Int?        // Оценка пользователя 1-5
   isFavorite       Boolean     @default(false)
   isArchived       Boolean     @default(false)

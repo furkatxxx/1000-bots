@@ -11,6 +11,7 @@ type MarketFilter = "all" | "russia" | "global" | "both";
 type DifficultyFilter = "all" | "easy" | "medium" | "hard";
 type VerdictFilter = "all" | "launch" | "pivot" | "reject" | "none";
 type PeriodFilter = "all" | "today" | "week" | "month";
+type StatusFilter = "all" | "new" | "interesting" | "in_progress" | "rejected";
 
 // Направление по умолчанию для каждого поля
 const DEFAULT_SORT_DIR: Record<SortField, SortDir> = {
@@ -38,6 +39,7 @@ export default function AllIdeasPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [verdict, setVerdict] = useState<VerdictFilter>("all");
   const [period, setPeriod] = useState<PeriodFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("all");
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -56,9 +58,10 @@ export default function AllIdeasPage() {
       if (search.trim()) params.set("search", search.trim());
       if (verdict !== "all") params.set("verdict", verdict);
       if (period !== "all") params.set("period", period);
+      if (status !== "all") params.set("userStatus", status);
       return params.toString();
     },
-    [sortParam, market, difficulty, onlyFavorites, showArchived, search, verdict, period]
+    [sortParam, market, difficulty, onlyFavorites, showArchived, search, verdict, period, status]
   );
 
   const fetchIdeas = useCallback(
@@ -90,7 +93,7 @@ export default function AllIdeasPage() {
   // Загрузка при смене фильтров (кроме поиска — там debounce)
   useEffect(() => {
     fetchIdeas(0);
-  }, [sortField, sortDir, market, difficulty, onlyFavorites, showArchived, verdict, period]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sortField, sortDir, market, difficulty, onlyFavorites, showArchived, verdict, period, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce поиска
   useEffect(() => {
@@ -157,6 +160,14 @@ export default function AllIdeasPage() {
     { value: "none", label: "Без оценки" },
   ];
 
+  const statusOptions: { value: StatusFilter; label: string }[] = [
+    { value: "all", label: "Все статусы" },
+    { value: "new", label: "Новые" },
+    { value: "interesting", label: "🔵 Интересно" },
+    { value: "in_progress", label: "🟢 В работе" },
+    { value: "rejected", label: "Отброшены" },
+  ];
+
   const periodOptions: { value: PeriodFilter; label: string }[] = [
     { value: "all", label: "Всё время" },
     { value: "today", label: "Сегодня" },
@@ -170,6 +181,7 @@ export default function AllIdeasPage() {
     if (difficulty !== "all") params.set("difficulty", difficulty);
     if (verdict !== "all") params.set("verdict", verdict);
     if (period !== "all") params.set("period", period);
+    if (status !== "all") params.set("userStatus", status);
     if (onlyFavorites) params.set("favorite", "true");
     if (search.trim()) params.set("search", search.trim());
     window.open(`/api/ideas/export?${params.toString()}`, "_blank");
@@ -244,6 +256,13 @@ export default function AllIdeasPage() {
           options={verdictOptions}
           value={verdict}
           onChange={(v) => setVerdict(v as VerdictFilter)}
+        />
+
+        {/* Статус */}
+        <FilterGroup
+          options={statusOptions}
+          value={status}
+          onChange={(v) => setStatus(v as StatusFilter)}
         />
 
         {/* Период */}

@@ -156,6 +156,7 @@ export interface IdeaDTO {
   landingHtml: string | null;
   marketAnalysis: string | null;
   adCopy: string | null;
+  userStatus: string;
   rating: number | null;
   isFavorite: boolean;
   isArchived: boolean;

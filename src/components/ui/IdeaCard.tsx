@@ -58,6 +58,20 @@ export const IdeaCard = React.memo(function IdeaCard({
                   {new Date(idea.reportDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
                 </span>
               )}
+              {idea.userStatus && idea.userStatus !== "new" && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                  style={{
+                    backgroundColor: idea.userStatus === "interesting" ? "var(--primary)" :
+                      idea.userStatus === "in_progress" ? "var(--success)" : "var(--destructive)",
+                    color: "#fff",
+                    opacity: idea.userStatus === "rejected" ? 0.6 : 1,
+                  }}
+                >
+                  {idea.userStatus === "interesting" ? "интересно" :
+                    idea.userStatus === "in_progress" ? "в работе" : "отброшена"}
+                </span>
+              )}
             </div>
           </div>
         </div>
