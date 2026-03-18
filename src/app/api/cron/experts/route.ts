@@ -26,8 +26,10 @@ export async function GET(request: NextRequest) {
     }
 
     const expertModel = settings.expertModel || "claude-sonnet-4-6";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Оцениваем идеи за последние 3 дня (не только сегодня)
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setHours(0, 0, 0, 0);
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
     const results: { name: string; score: number; verdict: string }[] = [];
     const errors: { name: string; error: string }[] = [];
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
       // Ищем следующую неоценённую идею
       const idea = await prisma.businessIdea.findFirst({
         where: {
-          report: { status: "complete", date: { gte: today } },
+          report: { status: "complete", date: { gte: threeDaysAgo } },
           expertAnalysis: null,
         },
         select: {
@@ -117,7 +119,7 @@ export async function GET(request: NextRequest) {
     // Автоотправка в Telegram — только когда ВСЕ идеи оценены (не осталось неоценённых)
     const remaining = await prisma.businessIdea.count({
       where: {
-        report: { status: "complete", date: { gte: today } },
+        report: { status: "complete", date: { gte: threeDaysAgo } },
         expertAnalysis: null,
       },
     });

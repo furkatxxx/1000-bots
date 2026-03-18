@@ -453,3 +453,138 @@ export async function runFullPipeline(reportId: string): Promise<{ success: bool
     trendsCount: s1.trendsCount,
   };
 }
+
+// ═══════════════════════════════════════════════════
+// findActiveReport — ищет ЛЮБОЙ generating отчёт
+// ═══════════════════════════════════════════════════
+
+const STUCK_THRESHOLD_MS = 15 * 60 * 1000; // 15 минут
+
+export async function findActiveReport(): Promise<{
+  reportId: string;
+  pipelineStage: string | null;
+  isStuck: boolean;
+  hasIdeas: boolean;
+} | null> {
+  const report = await prisma.dailyReport.findFirst({
+    where: { status: "generating" },
+    orderBy: { date: "desc" },
+    include: { _count: { select: { ideas: true } } },
+  });
+
+  if (!report) return null;
+
+  const lastActivity = report.updatedAt || report.createdAt;
+  const isStuck = Date.now() - lastActivity.getTime() > STUCK_THRESHOLD_MS;
+
+  return {
+    reportId: report.id,
+    pipelineStage: report.pipelineStage,
+    isStuck,
+    hasIdeas: report._count.ideas > 0,
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// advancePipeline — один этап за вызов
+// ═══════════════════════════════════════════════════
+
+export async function advancePipeline(): Promise<{
+  action: string;
+  success: boolean;
+  error?: string;
+  complete?: boolean;
+  reportId?: string;
+}> {
+  // 1. Ищем активный generating отчёт
+  const active = await findActiveReport();
+
+  if (active) {
+    const { reportId, pipelineStage, isStuck, hasIdeas } = active;
+
+    // Если завис и уже есть идеи — просто завершаем (этапы 1+2 прошли)
+    if (isStuck && hasIdeas && (pipelineStage === "stage-3" || pipelineStage === "stage-2-done")) {
+      // Попробуем завершить stage-3
+      const report = await prisma.dailyReport.findUnique({ where: { id: reportId } });
+      if (report && !report.trendAnalysis) {
+        // Промежуточные данные очищены — нельзя повторить валидацию
+        // Просто помечаем как complete (идеи уже есть)
+        await prisma.dailyReport.update({
+          where: { id: reportId },
+          data: {
+            status: "complete",
+            pipelineStage: null,
+            generatedAt: new Date(),
+            trendAnalysis: null,
+            filteredTrendsJson: null,
+          },
+        });
+        console.log(`[Pipeline Advance] Отчёт ${reportId} — завершён принудительно (идеи есть, валидация не нужна)`);
+        return { action: "force-complete", success: true, complete: true, reportId };
+      }
+    }
+
+    // Если завис — откатываем к последнему завершённому этапу
+    if (isStuck) {
+      const resetStage = pipelineStage === "stage-1" ? null
+        : pipelineStage === "stage-2" ? "stage-1-done"
+        : pipelineStage === "stage-3" ? "stage-2-done"
+        : pipelineStage; // уже "-done", не трогаем
+
+      if (resetStage !== pipelineStage) {
+        await prisma.dailyReport.update({
+          where: { id: reportId },
+          data: { pipelineStage: resetStage },
+        });
+        console.log(`[Pipeline Advance] Откат ${pipelineStage} → ${resetStage}`);
+      }
+
+      return await runNextStage(reportId, resetStage);
+    }
+
+    // Не завис — продвигаем
+    return await runNextStage(reportId, pipelineStage);
+  }
+
+  // 2. Нет активного отчёта — создаём за сегодня
+  const reportResult = await createOrGetTodayReport();
+  if ("error" in reportResult) {
+    return { action: "skip", success: true, error: reportResult.error };
+  }
+
+  return await runNextStage(reportResult.reportId, null);
+}
+
+async function runNextStage(reportId: string, stage: string | null): Promise<{
+  action: string;
+  success: boolean;
+  error?: string;
+  complete?: boolean;
+  reportId?: string;
+}> {
+  try {
+    if (!stage || stage === "stage-1") {
+      console.log(`[Pipeline Advance] Запуск этапа 1...`);
+      const r = await runStage1(reportId);
+      return { action: "stage-1", success: r.success, error: r.error, reportId };
+    }
+
+    if (stage === "stage-1-done") {
+      console.log(`[Pipeline Advance] Запуск этапа 2...`);
+      const r = await runStage2(reportId);
+      return { action: "stage-2", success: r.success, error: r.error, reportId };
+    }
+
+    if (stage === "stage-2-done") {
+      console.log(`[Pipeline Advance] Запуск этапа 3...`);
+      const r = await runStage3(reportId);
+      return { action: "stage-3", success: r.success, error: r.error, complete: r.success, reportId };
+    }
+
+    return { action: "none", success: true, complete: true, reportId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Неизвестная ошибка";
+    console.error(`[Pipeline Advance] Ошибка:`, err);
+    return { action: stage || "unknown", success: false, error: msg, reportId };
+  }
+}

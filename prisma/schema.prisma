@@ -46,6 +46,7 @@ model DailyReport {
   error       String?   // Ошибка, если статус failed
   generatedAt DateTime?
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt
   // Pipeline: промежуточные данные между этапами
   pipelineStage       String?   // "stage-1" | "stage-2" | "stage-3" | null (готово)
   trendAnalysis       String?   // Результат analyzeTrends от Opus (нужен для generateIdeas)
