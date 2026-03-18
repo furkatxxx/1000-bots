@@ -275,7 +275,7 @@ export async function runStage2(reportId: string): Promise<Stage2Result> {
 
   const genResult = await generateIdeas({
     trends: trendsForAI,
-    maxIdeas: 7,
+    maxIdeas: 5,
     model: generationModel,
     apiKey: settings.anthropicApiKey,
     previousIdeas: recentIdeas.map((i) => i.name),
