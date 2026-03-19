@@ -34,11 +34,25 @@ export async function GET(request: NextRequest) {
     const results: { name: string; score: number; verdict: string }[] = [];
     const errors: { name: string; error: string }[] = [];
 
+    // Cleanup: сброс зависших "processing" идей (orphans от предыдущих таймаутов Vercel)
+    const orphans = await prisma.businessIdea.updateMany({
+      where: {
+        expertAnalysis: "processing",
+        report: { status: "complete", date: { gte: threeDaysAgo } },
+      },
+      data: { expertAnalysis: null },
+    });
+    if (orphans.count > 0) {
+      console.log(`[Cron Experts] Сброшено ${orphans.count} зависших "processing" идей`);
+    }
+
     // Цикл: оцениваем идеи пока есть время
+    const EXPERT_CHAIN_TIME = 180_000; // ~3 мин на одну цепочку экспертов
     for (let i = 0; i < 10; i++) {
-      // Проверяем лимит времени
-      if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log(`[Cron Experts] Лимит времени — оценено ${results.length}, ошибок ${errors.length}`);
+      // Проверяем: хватит ли времени на полную цепочку?
+      const timeLeft = MAX_RUNTIME_MS - (Date.now() - startTime);
+      if (timeLeft < EXPERT_CHAIN_TIME) {
+        console.log(`[Cron Experts] Осталось ${Math.round(timeLeft / 1000)}с — мало для цепочки, стоп. Оценено ${results.length}, ошибок ${errors.length}`);
         break;
       }
 
