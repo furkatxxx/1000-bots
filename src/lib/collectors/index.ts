@@ -26,6 +26,10 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
     "yandex_wordstat",
     "vk_trends",
     "reddit",
+    "product_hunt",
+    "hacker_news",
+    "github_trending",
+    "news_api",
   ];
 
   const collectors = [];
