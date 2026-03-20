@@ -170,11 +170,20 @@ export async function GET(request: NextRequest) {
       console.log("[Cron Experts] Telegram уже отправлен сегодня — пропускаем");
     }
 
+    // Статус Telegram для ответа
+    let telegramStatus = "не требуется";
+    if (remaining > 0) telegramStatus = `ждёт (${remaining} неоценённых)`;
+    else if (todayReport && !todayReport.telegramSent) telegramStatus = "отправлен";
+    else if (!todayReport) telegramStatus = "нет отчёта сегодня";
+    else telegramStatus = "уже отправлен ранее";
+
     return NextResponse.json({
       success: true,
       evaluated: results.length,
       errors: errors.length,
       results,
+      remaining,
+      telegramStatus,
       ...(errors.length > 0 ? { errorDetails: errors } : {}),
       durationMs: Date.now() - startTime,
     });
