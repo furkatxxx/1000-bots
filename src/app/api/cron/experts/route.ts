@@ -138,14 +138,23 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Проверяем: есть ли сегодняшний отчёт без отправленного Telegram?
+    // Проверяем: есть ли сегодняшний отчёт?
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayReport = await prisma.dailyReport.findFirst({
-      where: { date: today, status: "complete", telegramSent: false },
+      where: { date: today, status: "complete" },
     });
 
-    if (remaining === 0 && todayReport && settings.telegramBotToken && settings.telegramChatId) {
+    let telegramStatus = "не требуется";
+
+    if (remaining > 0) {
+      telegramStatus = `ждёт (${remaining} неоценённых)`;
+    } else if (!todayReport) {
+      telegramStatus = "нет отчёта сегодня";
+    } else if (todayReport.telegramSent) {
+      telegramStatus = "уже отправлен ранее";
+    } else if (settings.telegramBotToken && settings.telegramChatId) {
+      // Все идеи оценены + Telegram ещё не отправлен → отправляем
       try {
         const baseUrl = process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
@@ -157,25 +166,15 @@ export async function GET(request: NextRequest) {
             where: { id: todayReport.id },
             data: { telegramSent: true },
           });
-          console.log("[Cron Experts] Все идеи оценены — ТОП отправлен в Telegram");
+          telegramStatus = "отправлен";
         } else {
-          console.log(`[Cron Experts] Telegram: нет идей с оценкой 7+ (sentCount: ${data.sentCount})`);
+          telegramStatus = `нет идей с оценкой 7+ (${data.sentCount})`;
         }
       } catch (tgErr) {
         console.error("[Cron Experts] Ошибка отправки в Telegram:", tgErr);
+        telegramStatus = "ошибка отправки";
       }
-    } else if (remaining > 0) {
-      console.log(`[Cron Experts] Осталось ${remaining} неоценённых — Telegram ждёт`);
-    } else if (todayReport?.telegramSent) {
-      console.log("[Cron Experts] Telegram уже отправлен сегодня — пропускаем");
     }
-
-    // Статус Telegram для ответа
-    let telegramStatus = "не требуется";
-    if (remaining > 0) telegramStatus = `ждёт (${remaining} неоценённых)`;
-    else if (todayReport && !todayReport.telegramSent) telegramStatus = "отправлен";
-    else if (!todayReport) telegramStatus = "нет отчёта сегодня";
-    else telegramStatus = "уже отправлен ранее";
 
     return NextResponse.json({
       success: true,
