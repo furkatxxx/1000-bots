@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { expertChain } from "@/lib/expert-chain";
 import { collectValidationData, formatValidationForPrompt } from "@/lib/validators";
-import { fetchWithTimeout } from "@/lib/utils";
+import { sendTopToTelegram } from "@/lib/telegram";
 
 export const maxDuration = 300;
 
@@ -154,25 +154,22 @@ export async function GET(request: NextRequest) {
     } else if (todayReport.telegramSent) {
       telegramStatus = "уже отправлен ранее";
     } else if (settings.telegramBotToken && settings.telegramChatId) {
-      // Все идеи оценены + Telegram ещё не отправлен → отправляем
+      // Все идеи оценены + Telegram ещё не отправлен → отправляем НАПРЯМУЮ
       try {
-        const baseUrl = process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
-          : `http://localhost:${process.env.PORT || 4000}`;
-        const res = await fetchWithTimeout(`${baseUrl}/api/telegram/send-top`, { method: "POST" });
-        const data = await res.json();
-        if (data.success && data.sentCount > 0) {
+        const result = await sendTopToTelegram();
+        if (result.success && result.sentCount > 0) {
           await prisma.dailyReport.update({
             where: { id: todayReport.id },
             data: { telegramSent: true },
           });
-          telegramStatus = "отправлен";
+          telegramStatus = `отправлен (${result.sentCount} идей)`;
         } else {
-          telegramStatus = `нет идей с оценкой 7+ (${data.sentCount})`;
+          telegramStatus = result.error || `нет идей с оценкой 7+`;
         }
       } catch (tgErr) {
+        const msg = tgErr instanceof Error ? tgErr.message : "Неизвестная ошибка";
         console.error("[Cron Experts] Ошибка отправки в Telegram:", tgErr);
-        telegramStatus = "ошибка отправки";
+        telegramStatus = `ошибка: ${msg}`;
       }
     }
 
