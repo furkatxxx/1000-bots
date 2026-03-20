@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Автоотправка в Telegram — только когда ВСЕ идеи оценены (не осталось неоценённых)
+    // Автоотправка в Telegram — когда ВСЕ идеи оценены и Telegram ещё не отправлен
     const remaining = await prisma.businessIdea.count({
       where: {
         report: { status: "complete", date: { gte: threeDaysAgo } },
@@ -138,18 +138,36 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (results.length > 0 && remaining === 0 && settings.telegramBotToken && settings.telegramChatId) {
+    // Проверяем: есть ли сегодняшний отчёт без отправленного Telegram?
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayReport = await prisma.dailyReport.findFirst({
+      where: { date: today, status: "complete", telegramSent: false },
+    });
+
+    if (remaining === 0 && todayReport && settings.telegramBotToken && settings.telegramChatId) {
       try {
         const baseUrl = process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
           : `http://localhost:${process.env.PORT || 4000}`;
-        await fetchWithTimeout(`${baseUrl}/api/telegram/send-top`, { method: "POST" });
-        console.log("[Cron Experts] Все идеи оценены — ТОП отправлен в Telegram");
+        const res = await fetchWithTimeout(`${baseUrl}/api/telegram/send-top`, { method: "POST" });
+        const data = await res.json();
+        if (data.success && data.sentCount > 0) {
+          await prisma.dailyReport.update({
+            where: { id: todayReport.id },
+            data: { telegramSent: true },
+          });
+          console.log("[Cron Experts] Все идеи оценены — ТОП отправлен в Telegram");
+        } else {
+          console.log(`[Cron Experts] Telegram: нет идей с оценкой 7+ (sentCount: ${data.sentCount})`);
+        }
       } catch (tgErr) {
         console.error("[Cron Experts] Ошибка отправки в Telegram:", tgErr);
       }
     } else if (remaining > 0) {
       console.log(`[Cron Experts] Осталось ${remaining} неоценённых — Telegram ждёт`);
+    } else if (todayReport?.telegramSent) {
+      console.log("[Cron Experts] Telegram уже отправлен сегодня — пропускаем");
     }
 
     return NextResponse.json({

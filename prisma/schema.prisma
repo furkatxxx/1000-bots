@@ -51,6 +51,7 @@ model DailyReport {
   pipelineStage       String?   // "stage-1" | "stage-2" | "stage-3" | null (готово)
   trendAnalysis       String?   // Результат analyzeTrends от Opus (нужен для generateIdeas)
   filteredTrendsJson  String?   // JSON: тренды после фильтра (нужны для generateIdeas)
+  telegramSent        Boolean   @default(false) // Telegram-уведомление уже отправлено?
 
   ideas BusinessIdea[]
 }
