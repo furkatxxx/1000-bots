@@ -157,14 +157,16 @@ export async function GET(request: NextRequest) {
       // Все идеи оценены + Telegram ещё не отправлен → отправляем НАПРЯМУЮ
       try {
         const result = await sendTopToTelegram();
-        if (result.success && result.sentCount > 0) {
+        if (result.success) {
           await prisma.dailyReport.update({
             where: { id: todayReport.id },
             data: { telegramSent: true },
           });
-          telegramStatus = `отправлен (${result.sentCount} идей)`;
+          telegramStatus = result.sentCount > 0
+            ? `отправлен (${result.sentCount} идей 7+)`
+            : `отправлен (отчёт: 0 идей 7+)`;
         } else {
-          telegramStatus = result.error || `нет идей с оценкой 7+`;
+          telegramStatus = `ошибка: ${result.error}`;
         }
       } catch (tgErr) {
         const msg = tgErr instanceof Error ? tgErr.message : "Неизвестная ошибка";

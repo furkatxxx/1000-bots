@@ -37,43 +37,85 @@ export async function sendTopToTelegram(options?: { force?: boolean }): Promise<
     return { success: false, sentCount: 0, error: "Нет готовых идей" };
   }
 
-  // Умная фильтрация: только идеи с экспертной оценкой ≥ 7
+  // Парсим экспертные оценки у всех идей
+  const allWithExperts = report.ideas.map((idea) => {
+    let expert: ExpertAnalysis | null = null;
+    if (idea.expertAnalysis && idea.expertAnalysis !== "processing") {
+      try { expert = JSON.parse(idea.expertAnalysis as string) as ExpertAnalysis; } catch {}
+    }
+    return { ...idea, _expert: expert };
+  });
+
+  const evaluated = allWithExperts.filter((i) => i._expert);
+  const notEvaluated = allWithExperts.filter((i) => !i._expert);
+
+  // ТОП идеи: 7+ или лучшие из того что есть
   let topIdeas;
   if (force) {
-    topIdeas = [...report.ideas]
-      .sort((a, b) => (b.successChance || 0) - (a.successChance || 0))
+    topIdeas = [...allWithExperts]
+      .sort((a, b) => (b._expert?.finalScore || b.successChance || 0) - (a._expert?.finalScore || a.successChance || 0))
       .slice(0, 5);
   } else {
-    const withExperts = report.ideas
-      .map((idea) => {
-        let expert: ExpertAnalysis | null = null;
-        if (idea.expertAnalysis) {
-          try { expert = JSON.parse(idea.expertAnalysis as string) as ExpertAnalysis; } catch {}
-        }
-        return { ...idea, _expert: expert };
-      })
-      .filter((idea) => idea._expert && idea._expert.finalScore >= 7)
+    topIdeas = evaluated
+      .filter((i) => i._expert && i._expert.finalScore >= 7)
       .sort((a, b) => (b._expert?.finalScore || 0) - (a._expert?.finalScore || 0))
       .slice(0, 5);
-
-    if (withExperts.length === 0) {
-      return { success: true, sentCount: 0, error: "Нет идей с оценкой 7+" };
-    }
-    topIdeas = withExperts;
   }
 
   const siteUrl = settings.siteUrl?.replace(/\/+$/, "")
     || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
 
-  // Формируем сообщение
   const date = report.date.toLocaleDateString("ru-RU", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 
-  const title = force ? "ТОП-5 бизнес-идей" : `ТОП идей (оценка 7+/10)`;
-  let message = `🏆 <b>${title}</b>\n📅 ${date}\n\n`;
+  // Диагностика проблем
+  const diagnostics: string[] = [];
+  if (report.ideas.length === 0) diagnostics.push("Pipeline не сгенерировал идей");
+  if (notEvaluated.length > 0) diagnostics.push(`${notEvaluated.length} идей не оценены экспертами`);
+  if (evaluated.length > 0 && topIdeas.length === 0) diagnostics.push("Все оценки ниже 7/10");
+
+  let message = "";
+
+  if (topIdeas.length > 0) {
+    const title = force ? "ТОП-5 бизнес-идей" : `ТОП идей (оценка 7+/10)`;
+    message = `🏆 <b>${title}</b>\n📅 ${date}\n\n`;
+  } else {
+    // Нет идей 7+ — отправляем отчёт о ситуации
+    message = `📊 <b>Ежедневный отчёт</b>\n📅 ${date}\n\n`;
+    message += `⚠️ <b>Нет идей с оценкой 7+</b>\n\n`;
+    message += `Всего идей: ${report.ideas.length}\n`;
+    message += `Оценено: ${evaluated.length}\n`;
+    if (evaluated.length > 0) {
+      const best = evaluated.sort((a, b) => (b._expert?.finalScore || 0) - (a._expert?.finalScore || 0))[0];
+      message += `Лучшая: ${escapeHtml(best.name)} — ${best._expert?.finalScore}/10\n`;
+    }
+    if (diagnostics.length > 0) {
+      message += `\n🔧 <b>Диагностика:</b>\n${diagnostics.map((d) => `• ${d}`).join("\n")}\n`;
+    }
+    if (siteUrl) {
+      message += `\n🔗 <a href="${siteUrl}">Открыть сайт →</a>`;
+    }
+
+    // Отправляем диагностическое сообщение
+    const tgUrl = `https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`;
+    const res = await fetchWithTimeout(tgUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: settings.telegramChatId,
+        text: message,
+        parse_mode: "HTML",
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      return { success: false, sentCount: 0, error: `Telegram API: ${data.description || "Ошибка"}` };
+    }
+    return { success: true, sentCount: 0, messageId: data.result.message_id };
+  }
 
   topIdeas.forEach((idea, i) => {
     const num = i + 1;
