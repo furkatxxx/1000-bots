@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { deepDiveIdea } from "@/lib/ai-brain";
 
-// POST /api/ideas/[id]/deep-dive — сгенерировать детальный план реализации
+// POST /api/ideas/[id]/deep-dive — сгенерировать глубокий анализ для существующей идеи
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -14,12 +14,10 @@ export async function POST(
     return NextResponse.json({ error: "Идея не найдена" }, { status: 404 });
   }
 
-  // Если уже есть deep dive — возвращаем его
   if (idea.deepDive) {
     return NextResponse.json({ deepDive: idea.deepDive, cached: true });
   }
 
-  // Получаем API-ключ
   const settings = await prisma.settings.findUnique({ where: { id: "main" } });
   if (!settings?.anthropicApiKey) {
     return NextResponse.json(
@@ -30,25 +28,29 @@ export async function POST(
 
   try {
     const result = await deepDiveIdea({
-      idea: {
+      concept: {
         name: idea.name,
-        description: idea.description,
-        targetAudience: idea.targetAudience,
-        monetization: idea.monetization,
-        actionPlan: idea.actionPlan,
+        pain: idea.description,
+        solution: idea.description,
+        who: idea.targetAudience,
+        whyNow: idea.trendBacking || "",
+        market: (idea.market as "russia" | "global" | "both") || "both",
       },
       apiKey: settings.anthropicApiKey,
-      model: settings.preferredModel || "claude-haiku-4-5-20251001",
     });
 
-    // Сохраняем в БД
+    // Формируем текст deep dive из результата
+    const deepDiveText = result.result
+      ? `## Вердикт: ${result.verdict}\n\n${result.result.description}\n\n### Конкуренты\n${result.competitors || "Не указаны"}\n\n### Уникальный угол\n${result.uniqueAngle || "Не указан"}\n\n### Юнит-экономика\n${result.unitEconomics || "Не рассчитана"}`
+      : `## Вердикт: KILL\n\n${result.killReason || "Не прошла глубокий анализ"}`;
+
     await prisma.businessIdea.update({
       where: { id },
-      data: { deepDive: result.deepDive },
+      data: { deepDive: deepDiveText },
     });
 
     return NextResponse.json({
-      deepDive: result.deepDive,
+      deepDive: deepDiveText,
       cached: false,
       tokensUsed: result.tokensIn + result.tokensOut,
     });

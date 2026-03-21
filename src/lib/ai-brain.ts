@@ -30,6 +30,8 @@ const SOURCE_WEIGHTS: Record<string, number> = {
   hacker_news: 0.7,      // Технический шум, мало про бизнес-боли
   github_trending: 0.5,  // Open-source проекты, не про деньги
   vk_trends: 0.5,        // Контент-маркетинг, низкая ценность
+  vc_ru: 1.8,            // Реальные боли предпринимателей РФ
+  reddit_pains: 1.6,     // Прямые жалобы и запросы помощи
 };
 
 // ═══════════════════════════════════════════════════
@@ -254,11 +256,15 @@ const SYSTEM_PROMPT = `Ты — бизнес-разведчик. Твоя зад
 Потом проверь: есть ли уже решение? Если да — НЕ предлагай, ЕСЛИ у тебя нет принципиально другого подхода.
 Лучше вернуть 2 сильные идеи, чем 5 средних. Если сегодня нет ничего стоящего — верни 2-3 лучших из того что есть, но не заполняй квоту мусором.
 
-## Для кого ищем:
-- Один человек с навыками AI-автоматизации и опытом в маркетплейсах
+## Профиль основателя (ищем идеи КОНКРЕТНО для этого человека):
+- Управляет командой на Wildberries — профи маркетплейсов, знает боли селлеров изнутри
+- Навыки: AI-автоматизация, веб-приложения, SaaS, боты, парсинг, API-интеграции
+- Каналы продаж: WB/Ozon (есть аудитория и опыт, но открыт к новым нишам)
+- Время: 1-2 часа/день параллельно с основным бизнесом
 - Бюджет: до $500. Запуск: 1-4 недели
-- Умеет: веб-приложения, SaaS, боты, парсинг, API-интеграции, AI-агенты
-- НЕ умеет: физпроизводство, найм, лицензии
+- НЕ делает: физпроизводство, найм, лицензии, холодные продажи, ежедневный контент (блоги/видео)
+- ПРЕИМУЩЕСТВО: глубокое знание e-commerce и маркетплейсов РФ. Идеи, где это знание даёт фору — в приоритете
+- НО: не ограничивайся маркетплейсами. Если видишь сильную боль в другой нише, где его AI-навыки применимы — предлагай
 
 ## Правила:
 1. ПРОБЛЕМА ПЕРВИЧНА: начни с боли. "Люди тратят X часов/рублей на Y" → "вот решение". Без конкретной боли — нет идеи.
@@ -554,62 +560,89 @@ export async function generateIdeas(input: BrainInput): Promise<GenerationResult
   throw new Error("Исчерпаны попытки генерации");
 }
 
-// Deep Dive — детальный анализ одной идеи
-export async function deepDiveIdea(input: {
-  idea: { name: string; description: string; targetAudience: string; monetization: string; actionPlan: string };
+// ═══════════════════════════════════════════════════
+// ГЕНЕРАЦИЯ КОНЦЕПТОВ — грубые идеи для дальнейшей проработки
+// ═══════════════════════════════════════════════════
+
+export interface RawConcept {
+  name: string;
+  pain: string;
+  solution: string;
+  who: string;
+  whyNow: string;
+  market: "russia" | "global" | "both";
+}
+
+const CONCEPTS_PROMPT = `Ты — бизнес-разведчик. Найди КОНКРЕТНЫЕ БОЛИ в трендах и предложи КРАТКИЕ концепты решений.
+
+## Профиль основателя:
+- Управляет командой на Wildberries — знает боли селлеров изнутри
+- Навыки: AI-автоматизация, веб-приложения, боты, парсинг, API
+- Время: 1-2 часа/день. Бюджет: до $500. Запуск: 1-4 недели
+- НЕ делает: физпроизводство, найм, лицензии, холодные продажи, ежедневный контент
+- ПРЕИМУЩЕСТВО: e-commerce + AI. Идеи на пересечении — в приоритете, но не ограничивайся
+
+## Правила:
+1. Начни с БОЛИ, не с решения. "Люди тратят X на Y" → только потом решение
+2. Каждый концепт привязан к тренду. Объясни ПОЧЕМУ сейчас
+3. РАЗНЫЕ ниши — минимум 3 разных отрасли из 7 концептов
+4. Конкретность: не "AI для бизнеса", а "бот который за селлера отвечает на вопросы покупателей WB"
+5. Проверь: есть ли БЕСПЛАТНЫЙ аналог? Если да и он закрывает 80%+ — не предлагай
+
+## Формат — JSON-массив из 7 объектов:
+{
+  "name": "Короткое название (3-5 слов)",
+  "pain": "Конкретная боль: кто, что, сколько теряет",
+  "solution": "Одно предложение: что делает продукт",
+  "who": "Конкретный сегмент + сколько их",
+  "whyNow": "Какой тренд + почему возможность СЕЙЧАС",
+  "market": "russia | global | both"
+}
+
+Всё на русском. Только JSON, без markdown.`;
+
+export async function generateConcepts(input: {
+  trends: BrainInput["trends"];
   apiKey: string;
-  model: string;
-}): Promise<{ deepDive: string; tokensIn: number; tokensOut: number }> {
-  const client = new Anthropic({ apiKey: input.apiKey });
+  previousIdeas?: string[];
+  trendAnalysis?: string;
+}): Promise<{ concepts: RawConcept[]; tokensIn: number; tokensOut: number }> {
+  const client = new Anthropic({ apiKey: input.apiKey, timeout: 5 * 60 * 1000 });
+
+  const enrichedTrends = input.trends
+    .map((t) => ({
+      ...t,
+      weightedScore: Math.round(t.score * (SOURCE_WEIGHTS[t.source] || 1.0)),
+    }))
+    .sort((a, b) => b.weightedScore - a.weightedScore)
+    .slice(0, 15);
+
+  const trendLines = enrichedTrends
+    .map((t) => {
+      let line = `- [${t.source}] ${t.originalTitle || t.title} (${t.weightedScore})`;
+      if (t.summary) line += `\n  Контекст: ${t.summary}`;
+      if (t.metadata?.monthlySearches) line += `\n  Спрос: ${Number(t.metadata.monthlySearches).toLocaleString("ru-RU")} запросов/мес`;
+      return line;
+    })
+    .join("\n");
+
+  let userPrompt = "";
+  if (input.trendAnalysis) {
+    userPrompt += `## Анализ болей:\n${input.trendAnalysis}\n\n`;
+  }
+  userPrompt += `## Тренды:\n${trendLines}\n\n`;
+  userPrompt += `Найди 7 концептов. Каждый = конкретная боль + краткое решение.`;
+
+  if (input.previousIdeas && input.previousIdeas.length > 0) {
+    userPrompt += `\n\n⛔ НЕ ПОВТОРЯЙ:\n${input.previousIdeas.map((n) => `- ${n}`).join("\n")}`;
+  }
+  userPrompt += `\n\nВерни JSON-массив из 7 объектов. Только JSON, без markdown.`;
 
   const response = await client.messages.create({
-    model: input.model,
+    model: "claude-opus-4-6",
     max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: `Ты — опытный стартап-консультант. Разверни эту бизнес-идею в ПОЛНЫЙ план реализации.
-
-Идея: ${input.idea.name}
-Описание: ${input.idea.description}
-Аудитория: ${input.idea.targetAudience}
-Монетизация: ${input.idea.monetization}
-Текущий план: ${input.idea.actionPlan}
-
-Напиши ДЕТАЛЬНЫЙ план реализации на русском языке:
-
-## 1. Техническая архитектура
-- Какие технологии использовать (стек)
-- Структура проекта
-- Ключевые API/интеграции
-
-## 2. MVP за первую неделю
-- Что ИМЕННО должен уметь MVP (минимум функций)
-- Пошаговые инструкции для создания
-- Какие задачи дать AI-агенту (Claude Code)
-
-## 3. Привлечение первых 10 клиентов
-- Конкретные площадки и каналы
-- Текст для первого поста/объявления
-- Бюджет на привлечение
-
-## 4. Монетизация: детали
-- Ценовая сетка (с обоснованием)
-- Система оплаты (ЮKassa, Stripe, etc.)
-- Когда вводить платные фичи
-
-## 5. Масштабирование (месяцы 2-6)
-- Что добавить после MVP
-- Как вырасти с 10 до 100 клиентов
-- Ключевые метрики для отслеживания
-
-## 6. Риски и подводные камни
-- Топ-3 главных риска
-- Как их минимизировать
-
-Пиши конкретно, с цифрами. Не лей воду.`,
-      },
-    ],
+    system: CONCEPTS_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
   });
 
   const textBlock = response.content.find((b) => b.type === "text");
@@ -617,8 +650,150 @@ export async function deepDiveIdea(input: {
     throw new Error("AI не вернул текстовый ответ");
   }
 
+  const cleaned = textBlock.text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) throw new Error("AI не вернул JSON-массив концептов");
+
+  const parsed = JSON.parse(jsonMatch[0]) as RawConcept[];
+  const valid = parsed.filter((c) => c.name && c.pain && c.solution);
+
+  console.log(`[AI Brain] Сгенерировано ${valid.length} концептов`);
+
   return {
-    deepDive: textBlock.text,
+    concepts: valid,
+    tokensIn: response.usage.input_tokens,
+    tokensOut: response.usage.output_tokens,
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// ГЛУБОКАЯ ПРОРАБОТКА — один концепт → полная идея
+// ═══════════════════════════════════════════════════
+
+const DEEP_DIVE_PROMPT = `Ты — жёсткий бизнес-аналитик. Твоя задача — превратить ГРУБЫЙ КОНЦЕПТ в проработанную бизнес-идею ИЛИ честно сказать что идея не стоит внимания.
+
+## Профиль основателя:
+- Опыт: Wildberries (команда), AI-автоматизация, веб/боты/API
+- Время: 1-2 ч/день. Бюджет: $500. Один человек.
+- НЕ делает: найм, физтовары, холодные продажи, ежедневный контент
+
+## Что нужно проверить:
+1. БОЛЬ — реальная ли? Люди УЖЕ платят за решение похожей проблемы?
+2. КОНКУРЕНТЫ — кто уже решает это? (назови 2-3 конкретных продукта, их цены, слабые места)
+3. УНИКАЛЬНЫЙ УГОЛ — чем ты отличаешься? "Дешевле/лучше" — не ответ. Нужен ДРУГОЙ подход
+4. ЭКОНОМИКА — сколько стоит клиент, сколько платит, сходится ли юнит-экономика?
+5. РЕАЛИЗМ — можно ли сделать за $500 и 2-4 недели одному?
+
+## Вердикт:
+- "build" — идея сильная, стоит делать
+- "maybe" — есть потенциал, но нужна доработка (укажи что)
+- "kill" — не стоит внимания (укажи почему)
+
+## Формат — JSON:
+{
+  "verdict": "build | maybe | kill",
+  "killReason": "только если kill — почему",
+  "name": "Финальное название (3-5 слов)",
+  "emoji": "подходящий эмодзи",
+  "description": "Полное описание: что, кому, как работает (3-5 предложений)",
+  "targetAudience": "Кто, сколько их, где найти (с цифрами)",
+  "monetization": "Модель, цены, средний чек, почему заплатят",
+  "competitors": "2-3 конкурента: название, цена, слабое место",
+  "uniqueAngle": "Чем принципиально отличаешься",
+  "unitEconomics": "CAC, LTV, срок окупаемости",
+  "whyNow": "Тренд + почему возможность именно сейчас",
+  "difficulty": "easy | medium | hard",
+  "market": "russia | global | both"
+}
+
+Будь жёстким. Лучше честный "kill" чем оптимистичный "build" на слабой идее.
+Всё на русском. Только JSON, без markdown.`;
+
+export async function deepDiveIdea(input: {
+  concept: RawConcept;
+  apiKey: string;
+}): Promise<{
+  result: GeneratedIdea | null;
+  verdict: string;
+  killReason?: string;
+  competitors?: string;
+  uniqueAngle?: string;
+  unitEconomics?: string;
+  tokensIn: number;
+  tokensOut: number;
+}> {
+  const client = new Anthropic({ apiKey: input.apiKey, timeout: 3 * 60 * 1000 });
+
+  const userPrompt = `Проанализируй этот концепт:
+
+**Название:** ${input.concept.name}
+**Боль:** ${input.concept.pain}
+**Решение:** ${input.concept.solution}
+**Кто:** ${input.concept.who}
+**Почему сейчас:** ${input.concept.whyNow}
+**Рынок:** ${input.concept.market}
+
+Проведи глубокий анализ и верни JSON. Только JSON, без markdown.`;
+
+  const response = await client.messages.create({
+    model: "claude-opus-4-6",
+    max_tokens: 4096,
+    system: DEEP_DIVE_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("AI не вернул текстовый ответ");
+  }
+
+  const cleaned = textBlock.text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("AI не вернул JSON");
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  const verdict = parsed.verdict || "kill";
+
+  console.log(`[AI Brain] Deep dive "${input.concept.name}" → ${verdict}`);
+
+  if (verdict === "kill") {
+    return {
+      result: null,
+      verdict,
+      killReason: parsed.killReason,
+      tokensIn: response.usage.input_tokens,
+      tokensOut: response.usage.output_tokens,
+    };
+  }
+
+  const market = ["russia", "global", "both"].includes(parsed.market) ? parsed.market : input.concept.market;
+  const defaultScenario = { revenue: "", channels: "", audience: "", advantages: "" };
+
+  const idea: GeneratedIdea = {
+    name: parsed.name || input.concept.name,
+    emoji: parsed.emoji || "💡",
+    description: parsed.description || input.concept.solution,
+    targetAudience: parsed.targetAudience || input.concept.who,
+    monetization: parsed.monetization || "",
+    startupCost: "low",
+    competitionLevel: "medium",
+    trendBacking: parsed.whyNow || input.concept.whyNow,
+    actionPlan: "",
+    claudeCodeReady: true,
+    difficulty: ["easy", "medium", "hard"].includes(parsed.difficulty) ? parsed.difficulty : "medium",
+    successChance: 0,
+    estimatedRevenue: "",
+    timeToLaunch: "",
+    market,
+    marketScenarios: { russia: { ...defaultScenario }, global: { ...defaultScenario } },
+  };
+
+  return {
+    result: idea,
+    verdict,
+    competitors: parsed.competitors,
+    uniqueAngle: parsed.uniqueAngle,
+    unitEconomics: parsed.unitEconomics,
     tokensIn: response.usage.input_tokens,
     tokensOut: response.usage.output_tokens,
   };

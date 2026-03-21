@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { collectAll } from "@/lib/collectors";
-import { generateIdeas, filterTrends, semanticDedup, analyzeTrends, validateIdeas } from "@/lib/ai-brain";
+import { generateIdeas, filterTrends, semanticDedup, analyzeTrends, validateIdeas, generateConcepts, deepDiveIdea } from "@/lib/ai-brain";
+import type { RawConcept } from "@/lib/ai-brain";
 import {
   runHealthCheck,
   sendHealthTelegramAlert,
@@ -233,7 +234,7 @@ export async function runStage1(reportId: string): Promise<Stage1Result> {
 }
 
 // ═══════════════════════════════════════════════════
-// ЭТАП 2: Генерация идей (Opus) + дедуп (Sonnet)
+// ЭТАП 2: Генерация концептов (Opus) — грубые идеи
 // ═══════════════════════════════════════════════════
 
 export async function runStage2(reportId: string): Promise<Stage2Result> {
@@ -259,9 +260,8 @@ export async function runStage2(reportId: string): Promise<Stage2Result> {
   });
 
   const trendsForAI = JSON.parse(report.filteredTrendsJson);
-  const generationModel = "claude-opus-4-6";
 
-  // Дедупликация: прошлые идеи
+  // Прошлые идеи для дедупликации
   const recentIdeas = await prisma.businessIdea.findMany({
     where: { report: { id: { not: reportId }, status: "complete" } },
     select: { name: true },
@@ -269,80 +269,186 @@ export async function runStage2(reportId: string): Promise<Stage2Result> {
     take: 30,
   });
 
-  // Генерация идей — Opus
-  const focusPresets = parsePresets(settings.focusPresets);
-  console.log(`[Pipeline] Этап 2: Генерация 7 идей (${generationModel}, фокус: ${focusPresets.length > 0 ? focusPresets.join("+") : "универсальный"})...`);
-
-  const genResult = await generateIdeas({
+  // Генерация 7 грубых концептов — Opus
+  console.log(`[Pipeline] Этап 2: Генерация концептов (Opus)...`);
+  const conceptResult = await generateConcepts({
     trends: trendsForAI,
-    maxIdeas: 5,
-    model: generationModel,
     apiKey: settings.anthropicApiKey,
     previousIdeas: recentIdeas.map((i) => i.name),
     trendAnalysis: report.trendAnalysis,
-    focusPresets,
   });
-  console.log(`[Pipeline] Сгенерировано: ${genResult.ideas.length} идей`);
+  console.log(`[Pipeline] Сгенерировано ${conceptResult.concepts.length} концептов`);
 
-  let totalTokensIn = genResult.tokensIn;
-  let totalTokensOut = genResult.tokensOut;
-
-  // Семантическая дедупликация — Sonnet
-  console.log("[Pipeline] Дедупликация (Sonnet)...");
-  const dedupResult = await semanticDedup({
-    ideas: genResult.ideas,
-    apiKey: settings.anthropicApiKey,
-    model: "claude-sonnet-4-6",
-  });
-  totalTokensIn += dedupResult.tokensIn;
-  totalTokensOut += dedupResult.tokensOut;
-  console.log(`[Pipeline] После дедупа: ${dedupResult.unique.length} уникальных`);
-
-  // Сохраняем идеи в БД
-  await prisma.businessIdea.deleteMany({ where: { reportId } });
-  await prisma.businessIdea.createMany({
-    data: dedupResult.unique.map((idea) => ({
-      reportId,
-      name: idea.name,
-      emoji: idea.emoji,
-      description: idea.description,
-      targetAudience: idea.targetAudience,
-      monetization: idea.monetization,
-      startupCost: idea.startupCost,
-      competitionLevel: idea.competitionLevel,
-      trendBacking: idea.trendBacking,
-      actionPlan: idea.actionPlan,
-      claudeCodeReady: idea.claudeCodeReady,
-      difficulty: idea.difficulty,
-      successChance: idea.successChance,
-      estimatedRevenue: idea.estimatedRevenue,
-      timeToLaunch: idea.timeToLaunch,
-      market: idea.market,
-      marketScenarios: JSON.stringify(idea.marketScenarios),
-    })),
-  });
-
+  // Сохраняем концепты в filteredTrendsJson (перезаписываем — тренды больше не нужны)
   await prisma.dailyReport.update({
     where: { id: reportId },
     data: {
-      pipelineStage: "stage-2-done",
-      ideasCount: dedupResult.unique.length,
-      aiModel: generationModel,
-      aiTokensIn: (report.aiTokensIn || 0) + totalTokensIn,
-      aiTokensOut: (report.aiTokensOut || 0) + totalTokensOut,
+      pipelineStage: "stage-2-concepts-done",
+      filteredTrendsJson: JSON.stringify(conceptResult.concepts),
+      aiTokensIn: (report.aiTokensIn || 0) + conceptResult.tokensIn,
+      aiTokensOut: (report.aiTokensOut || 0) + conceptResult.tokensOut,
     },
   });
 
+  // Удаляем старые идеи если были
+  await prisma.businessIdea.deleteMany({ where: { reportId } });
+
   return {
     success: true,
-    ideasCount: dedupResult.unique.length,
-    tokensIn: totalTokensIn,
-    tokensOut: totalTokensOut,
+    ideasCount: conceptResult.concepts.length,
+    tokensIn: conceptResult.tokensIn,
+    tokensOut: conceptResult.tokensOut,
   };
 }
 
 // ═══════════════════════════════════════════════════
-// ЭТАП 3: Валидация (Opus) + финализация
+// ЭТАП 2-DEEP: Глубокий анализ одного концепта (Opus)
+// Вызывается несколько раз — по одному концепту за вызов
+// ═══════════════════════════════════════════════════
+
+export async function runStage2Deep(reportId: string): Promise<Stage2Result> {
+  const report = await prisma.dailyReport.findUnique({ where: { id: reportId } });
+  if (!report) {
+    return { success: false, error: "Отчёт не найден", ideasCount: 0, tokensIn: 0, tokensOut: 0 };
+  }
+  if (!report.filteredTrendsJson) {
+    return { success: false, error: "Нет концептов для анализа", ideasCount: 0, tokensIn: 0, tokensOut: 0 };
+  }
+
+  const settings = await prisma.settings.findUnique({ where: { id: "main" } });
+  if (!settings?.anthropicApiKey) {
+    return { success: false, error: "Нет API-ключа Anthropic", ideasCount: 0, tokensIn: 0, tokensOut: 0 };
+  }
+
+  await prisma.dailyReport.update({
+    where: { id: reportId },
+    data: { pipelineStage: "stage-2-deep" },
+  });
+
+  const concepts: RawConcept[] = JSON.parse(report.filteredTrendsJson);
+
+  // Какие концепты уже обработаны?
+  const existingIdeas = await prisma.businessIdea.findMany({
+    where: { reportId },
+    select: { name: true },
+  });
+  const processedNames = new Set(existingIdeas.map((i) => i.name));
+
+  // Находим первый необработанный концепт
+  const nextConcept = concepts.find((c) => !processedNames.has(c.name));
+
+  if (!nextConcept) {
+    // Все концепты обработаны
+    const finalCount = existingIdeas.length;
+    await prisma.dailyReport.update({
+      where: { id: reportId },
+      data: {
+        pipelineStage: "stage-2-done",
+        ideasCount: finalCount,
+        aiModel: "claude-opus-4-6",
+      },
+    });
+    console.log(`[Pipeline] Все концепты обработаны. Итого: ${finalCount} идей`);
+    return { success: true, ideasCount: finalCount, tokensIn: 0, tokensOut: 0 };
+  }
+
+  // Глубокий анализ одного концепта
+  const conceptIndex = concepts.indexOf(nextConcept) + 1;
+  console.log(`[Pipeline] Deep dive ${conceptIndex}/${concepts.length}: "${nextConcept.name}"...`);
+
+  const diveResult = await deepDiveIdea({
+    concept: nextConcept,
+    apiKey: settings.anthropicApiKey,
+  });
+
+  if (diveResult.result) {
+    // Идея прошла проверку — сохраняем
+    await prisma.businessIdea.create({
+      data: {
+        reportId,
+        name: diveResult.result.name,
+        emoji: diveResult.result.emoji,
+        description: diveResult.result.description,
+        targetAudience: diveResult.result.targetAudience,
+        monetization: diveResult.result.monetization,
+        startupCost: diveResult.result.startupCost,
+        competitionLevel: diveResult.result.competitionLevel,
+        trendBacking: diveResult.result.trendBacking,
+        actionPlan: diveResult.result.actionPlan,
+        claudeCodeReady: diveResult.result.claudeCodeReady,
+        difficulty: diveResult.result.difficulty,
+        successChance: diveResult.result.successChance,
+        estimatedRevenue: diveResult.result.estimatedRevenue,
+        timeToLaunch: diveResult.result.timeToLaunch,
+        market: diveResult.result.market,
+        marketScenarios: JSON.stringify(diveResult.result.marketScenarios),
+      },
+    });
+    console.log(`[Pipeline] "${nextConcept.name}" → ${diveResult.verdict} ✅`);
+  } else {
+    // Идея убита — сохраняем как заглушку чтобы не обрабатывать повторно
+    await prisma.businessIdea.create({
+      data: {
+        reportId,
+        name: nextConcept.name,
+        emoji: "❌",
+        description: `ОТКЛОНЕНО: ${diveResult.killReason || "не прошла глубокий анализ"}`,
+        targetAudience: nextConcept.who,
+        monetization: "",
+        startupCost: "low",
+        competitionLevel: "medium",
+        trendBacking: nextConcept.whyNow,
+        actionPlan: "KILLED",
+        claudeCodeReady: false,
+        difficulty: "hard",
+        successChance: 0,
+        estimatedRevenue: "",
+        timeToLaunch: "",
+        market: nextConcept.market,
+      },
+    });
+    console.log(`[Pipeline] "${nextConcept.name}" → kill (${diveResult.killReason}) ❌`);
+  }
+
+  // Обновляем токены
+  await prisma.dailyReport.update({
+    where: { id: reportId },
+    data: {
+      pipelineStage: "stage-2-concepts-done", // Остаёмся в этом статусе пока не все обработаны
+      aiTokensIn: (report.aiTokensIn || 0) + diveResult.tokensIn,
+      aiTokensOut: (report.aiTokensOut || 0) + diveResult.tokensOut,
+    },
+  });
+
+  // Проверяем: остались ли ещё необработанные?
+  const remainingCount = concepts.length - processedNames.size - 1;
+  if (remainingCount <= 0) {
+    // Все обработаны — переходим к stage-2-done
+    const allIdeas = await prisma.businessIdea.findMany({
+      where: { reportId, actionPlan: { not: "KILLED" } },
+    });
+    await prisma.dailyReport.update({
+      where: { id: reportId },
+      data: {
+        pipelineStage: "stage-2-done",
+        ideasCount: allIdeas.length,
+        aiModel: "claude-opus-4-6",
+      },
+    });
+    console.log(`[Pipeline] Все концепты обработаны. Идей: ${allIdeas.length}`);
+  }
+
+  return {
+    success: true,
+    ideasCount: 1,
+    tokensIn: diveResult.tokensIn,
+    tokensOut: diveResult.tokensOut,
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// ЭТАП 3: Финализация — очистка killed-идей + завершение
+// (Валидация теперь происходит в deep dive)
 // ═══════════════════════════════════════════════════
 
 export async function runStage3(reportId: string): Promise<Stage3Result> {
@@ -354,54 +460,22 @@ export async function runStage3(reportId: string): Promise<Stage3Result> {
     return { success: false, error: `Этап 2 не завершён (текущий: ${report.pipelineStage})`, validCount: 0, removedCount: 0, tokensIn: 0, tokensOut: 0 };
   }
 
-  const settings = await prisma.settings.findUnique({ where: { id: "main" } });
-  if (!settings?.anthropicApiKey) {
-    return { success: false, error: "Нет API-ключа Anthropic", validCount: 0, removedCount: 0, tokensIn: 0, tokensOut: 0 };
-  }
-
   await prisma.dailyReport.update({
     where: { id: reportId },
     data: { pipelineStage: "stage-3" },
   });
 
-  // Читаем идеи из БД
-  const ideas = await prisma.businessIdea.findMany({
+  // Удаляем killed-идеи (actionPlan === "KILLED")
+  const killed = await prisma.businessIdea.deleteMany({
+    where: { reportId, actionPlan: "KILLED" },
+  });
+  console.log(`[Pipeline] Этап 3: Очистка — удалено ${killed.count} отклонённых концептов`);
+
+  // Считаем оставшиеся
+  const validIdeas = await prisma.businessIdea.findMany({
     where: { reportId },
-    select: {
-      id: true, name: true, emoji: true, description: true,
-      targetAudience: true, monetization: true, startupCost: true,
-      competitionLevel: true, trendBacking: true, actionPlan: true,
-      claudeCodeReady: true, difficulty: true, successChance: true,
-      estimatedRevenue: true, timeToLaunch: true, market: true,
-      marketScenarios: true,
-    },
+    select: { id: true },
   });
-
-  // Валидация — Opus
-  console.log("[Pipeline] Этап 3: Валидация (Opus)...");
-  const ideasForValidation = ideas.map((i) => ({
-    ...i,
-    successChance: i.successChance ?? 0,
-    estimatedRevenue: i.estimatedRevenue ?? "",
-    timeToLaunch: i.timeToLaunch ?? "",
-    market: (i.market as "russia" | "global" | "both") || "both",
-    marketScenarios: i.marketScenarios ? JSON.parse(i.marketScenarios) : { russia: { revenue: "", channels: "", audience: "", advantages: "" }, global: { revenue: "", channels: "", audience: "", advantages: "" } },
-  }));
-
-  const validationResult = await validateIdeas({
-    ideas: ideasForValidation,
-    apiKey: settings.anthropicApiKey,
-  });
-  console.log(`[Pipeline] После валидации: ${validationResult.valid.length} реалистичных (убрано ${validationResult.removed})`);
-
-  // Удаляем отклонённые идеи
-  const validNames = new Set(validationResult.valid.map((i) => i.name));
-  const toDelete = ideas.filter((i) => !validNames.has(i.name)).map((i) => i.id);
-  if (toDelete.length > 0) {
-    await prisma.businessIdea.deleteMany({
-      where: { id: { in: toDelete } },
-    });
-  }
 
   // Финализация
   await prisma.dailyReport.update({
@@ -409,24 +483,21 @@ export async function runStage3(reportId: string): Promise<Stage3Result> {
     data: {
       status: "complete",
       pipelineStage: null,
-      ideasCount: validationResult.valid.length,
-      aiTokensIn: (report.aiTokensIn || 0) + validationResult.tokensIn,
-      aiTokensOut: (report.aiTokensOut || 0) + validationResult.tokensOut,
+      ideasCount: validIdeas.length,
       generatedAt: new Date(),
-      // Очищаем промежуточные данные
       trendAnalysis: null,
       filteredTrendsJson: null,
     },
   });
 
-  console.log(`[Pipeline] ═══ ГОТОВО ═══ ${validationResult.valid.length} идей (эксперты оценят в 9:00 МСК)`);
+  console.log(`[Pipeline] ═══ ГОТОВО ═══ ${validIdeas.length} идей прошли глубокий анализ`);
 
   return {
     success: true,
-    validCount: validationResult.valid.length,
-    removedCount: validationResult.removed,
-    tokensIn: validationResult.tokensIn,
-    tokensOut: validationResult.tokensOut,
+    validCount: validIdeas.length,
+    removedCount: killed.count,
+    tokensIn: 0,
+    tokensOut: 0,
   };
 }
 
@@ -528,6 +599,7 @@ export async function advancePipeline(): Promise<{
     if (isStuck) {
       const resetStage = pipelineStage === "stage-1" ? null
         : pipelineStage === "stage-2" ? "stage-1-done"
+        : pipelineStage === "stage-2-deep" ? "stage-2-concepts-done"
         : pipelineStage === "stage-3" ? "stage-2-done"
         : pipelineStage; // уже "-done", не трогаем
 
@@ -570,9 +642,15 @@ async function runNextStage(reportId: string, stage: string | null): Promise<{
     }
 
     if (stage === "stage-1-done") {
-      console.log(`[Pipeline Advance] Запуск этапа 2...`);
+      console.log(`[Pipeline Advance] Запуск этапа 2 (концепты)...`);
       const r = await runStage2(reportId);
-      return { action: "stage-2", success: r.success, error: r.error, reportId };
+      return { action: "stage-2-concepts", success: r.success, error: r.error, reportId };
+    }
+
+    if (stage === "stage-2-concepts-done") {
+      console.log(`[Pipeline Advance] Запуск deep dive...`);
+      const r = await runStage2Deep(reportId);
+      return { action: "stage-2-deep", success: r.success, error: r.error, reportId };
     }
 
     if (stage === "stage-2-done") {

@@ -8,6 +8,8 @@ import { YandexWordstatCollector } from "./yandex-wordstat";
 
 import { VkTrendsCollector } from "./vk-trends";
 import { RedditCollector } from "./reddit";
+import { RedditPainsCollector } from "./reddit-pains";
+import { VcRuCollector } from "./vc-ru";
 import { translateToRussian } from "../translate";
 
 interface CollectorConfig {
@@ -30,6 +32,8 @@ export async function collectAll(config: CollectorConfig): Promise<TrendItem[]> 
     "hacker_news",
     "github_trending",
     "news_api",
+    "vc_ru",
+    "reddit_pains",
   ];
 
   const collectors = [];
@@ -57,6 +61,12 @@ if (enabled.includes("vk_trends") && config.vkServiceToken) {
   }
   if (enabled.includes("reddit")) {
     collectors.push(new RedditCollector());
+  }
+  if (enabled.includes("vc_ru")) {
+    collectors.push(new VcRuCollector());
+  }
+  if (enabled.includes("reddit_pains")) {
+    collectors.push(new RedditPainsCollector());
   }
 
   // Запускаем параллельно, не падаем если один источник сломался
@@ -100,4 +110,6 @@ export { YandexWordstatCollector } from "./yandex-wordstat";
 
 export { VkTrendsCollector } from "./vk-trends";
 export { RedditCollector } from "./reddit";
+export { RedditPainsCollector } from "./reddit-pains";
+export { VcRuCollector } from "./vc-ru";
 export type { TrendItem } from "./base";
