@@ -362,11 +362,11 @@ export async function runStage2Deep(reportId: string): Promise<Stage2Result> {
   });
 
   if (diveResult.result) {
-    // Идея прошла проверку — сохраняем
+    // Идея прошла проверку — сохраняем (name = оригинал концепта для трекинга)
     await prisma.businessIdea.create({
       data: {
         reportId,
-        name: diveResult.result.name,
+        name: nextConcept.name,
         emoji: diveResult.result.emoji,
         description: diveResult.result.description,
         targetAudience: diveResult.result.targetAudience,
