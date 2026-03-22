@@ -84,7 +84,10 @@ model BusinessIdea {
   marketAnalysis   String?     // JSON: TAM/SAM/SOM + SEO-анализ (#34, #35)
   adCopy           String?     // JSON: тексты для рекламы (#36)
   userStatus       String      @default("new") // new, interesting, in_progress, rejected
-  rating           Int?        // Оценка пользователя 1-5
+  rating           Int?        // Оценка пользователя 1-5 (legacy, не используется)
+  rejectReason     String?     // vague, crowded, not_my_profile, bad_economics, boring
+  likeReasons      String?     // JSON-массив: ["real_pain","easy_start","clear_audience","good_money"]
+  feedbackComment  String?     // Свободный текст от пользователя
   isFavorite       Boolean     @default(false)
   isArchived       Boolean     @default(false)
   createdAt        DateTime    @default(now())

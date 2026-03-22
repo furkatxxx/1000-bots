@@ -18,6 +18,7 @@ interface BrainInput {
   previousIdeas?: string[];
   trendAnalysis?: string;
   focusPresets?: PresetId[];
+  tasteProfileBlock?: string;
 }
 
 // Вес источников: более надёжные получают приоритет
@@ -517,9 +518,9 @@ export async function generateIdeas(input: BrainInput): Promise<GenerationResult
     try {
       const userPrompt = buildUserPrompt(input);
       const focusBlock = buildFocusBlock(input.focusPresets || []);
-      const systemPrompt = focusBlock
-        ? `${SYSTEM_PROMPT}\n\n${focusBlock}`
-        : SYSTEM_PROMPT;
+      let systemPrompt = SYSTEM_PROMPT;
+      if (focusBlock) systemPrompt += `\n\n${focusBlock}`;
+      if (input.tasteProfileBlock) systemPrompt += `\n\n${input.tasteProfileBlock}`;
 
       console.log(`[AI Brain] Генерация ${input.maxIdeas} идей (модель: ${input.model}, фокус: ${input.focusPresets?.join("+") || "универсальный"})...`);
       const response = await client.messages.create({
@@ -606,6 +607,7 @@ export async function generateConcepts(input: {
   apiKey: string;
   previousIdeas?: string[];
   trendAnalysis?: string;
+  tasteProfileBlock?: string;
 }): Promise<{ concepts: RawConcept[]; tokensIn: number; tokensOut: number }> {
   const client = new Anthropic({ apiKey: input.apiKey, timeout: 5 * 60 * 1000 });
 
@@ -638,10 +640,13 @@ export async function generateConcepts(input: {
   }
   userPrompt += `\n\nВерни JSON-массив из 7 объектов. Только JSON, без markdown.`;
 
+  let systemPromptConcepts = CONCEPTS_PROMPT;
+  if (input.tasteProfileBlock) systemPromptConcepts += `\n\n${input.tasteProfileBlock}`;
+
   const response = await client.messages.create({
     model: "claude-opus-4-6",
     max_tokens: 4096,
-    system: CONCEPTS_PROMPT,
+    system: systemPromptConcepts,
     messages: [{ role: "user", content: userPrompt }],
   });
 

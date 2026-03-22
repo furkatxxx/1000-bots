@@ -9,6 +9,7 @@ import {
   SOURCE_LABELS,
 } from "@/lib/health-check";
 import { parsePresets } from "@/lib/focus-presets";
+import { buildTasteProfile } from "@/lib/taste-profile";
 
 // ═══════════════════════════════════════════════════
 // Типы результатов каждого этапа
@@ -269,6 +270,12 @@ export async function runStage2(reportId: string): Promise<Stage2Result> {
     take: 30,
   });
 
+  // Профиль вкуса основателя
+  const tasteProfile = await buildTasteProfile();
+  if (tasteProfile.promptBlock) {
+    console.log(`[Pipeline] Профиль вкуса: ${tasteProfile.totalFeedback} оценок → встроен в промпт`);
+  }
+
   // Генерация 7 грубых концептов — Opus
   console.log(`[Pipeline] Этап 2: Генерация концептов (Opus)...`);
   const conceptResult = await generateConcepts({
@@ -276,6 +283,7 @@ export async function runStage2(reportId: string): Promise<Stage2Result> {
     apiKey: settings.anthropicApiKey,
     previousIdeas: recentIdeas.map((i) => i.name),
     trendAnalysis: report.trendAnalysis,
+    tasteProfileBlock: tasteProfile.promptBlock || undefined,
   });
   console.log(`[Pipeline] Сгенерировано ${conceptResult.concepts.length} концептов`);
 

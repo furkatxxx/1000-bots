@@ -17,6 +17,10 @@ export default function IdeaDetailPage({
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
   const [expertLoading, setExpertLoading] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [feedbackMode, setFeedbackMode] = useState<"none" | "like" | "reject">("none");
+  const [selectedLikeReasons, setSelectedLikeReasons] = useState<string[]>([]);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [comment, setComment] = useState("");
 
   useEffect(() => {
     fetch(`/api/ideas/${id}`)
@@ -29,17 +33,36 @@ export default function IdeaDetailPage({
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function handleRate(rating: number) {
+  async function handleSetStatus(status: string, extra?: Record<string, unknown>) {
     if (!idea) return;
+    const body: Record<string, unknown> = { userStatus: status, ...extra };
     const res = await fetch(`/api/ideas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rating: idea.rating === rating ? null : rating }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const data = await res.json();
       setIdea(data.idea);
     }
+    setFeedbackMode("none");
+    setSelectedLikeReasons([]);
+    setComment("");
+    setCommentOpen(false);
+  }
+
+  async function handleReject(reason: string) {
+    await handleSetStatus("rejected", {
+      rejectReason: reason,
+      ...(comment ? { feedbackComment: comment } : {}),
+    });
+  }
+
+  async function handleLike() {
+    await handleSetStatus("interesting", {
+      likeReasons: selectedLikeReasons.length > 0 ? selectedLikeReasons : null,
+      ...(comment ? { feedbackComment: comment } : {}),
+    });
   }
 
   async function handleToggleFavorite() {
@@ -183,58 +206,21 @@ export default function IdeaDetailPage({
         </button>
       </div>
 
-      {/* Статус идеи */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Статус:</span>
-        {([
-          { value: "new", label: "Новая", color: "var(--muted)", textColor: "var(--muted-foreground)" },
-          { value: "interesting", label: "Интересно", color: "var(--primary)", textColor: "#fff" },
-          { value: "in_progress", label: "В работе", color: "var(--success)", textColor: "#fff" },
-          { value: "rejected", label: "Отброшена", color: "var(--destructive)", textColor: "#fff" },
-        ] as const).map((opt) => (
-          <button
-            key={opt.value}
-            onClick={async () => {
-              const res = await fetch(`/api/ideas/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userStatus: opt.value }),
-              });
-              if (res.ok) {
-                const data = await res.json();
-                setIdea(data.idea);
-              }
-            }}
-            className="cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all"
-            style={{
-              backgroundColor: idea.userStatus === opt.value ? opt.color : "var(--muted)",
-              color: idea.userStatus === opt.value ? opt.textColor : "var(--muted-foreground)",
-              opacity: idea.userStatus === opt.value ? 1 : 0.6,
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Рейтинг */}
-      <div className="mb-6 flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            onClick={() => handleRate(star)}
-            className="cursor-pointer text-2xl transition-transform hover:scale-110"
-            style={{
-              color: star <= (idea.rating || 0) ? "var(--warning)" : "var(--muted)",
-            }}
-          >
-            ★
-          </button>
-        ))}
-        <span className="ml-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
-          {idea.rating ? `${idea.rating}/5` : "Не оценено"}
-        </span>
-      </div>
+      {/* Обратная связь */}
+      <FeedbackBlock
+        idea={idea}
+        feedbackMode={feedbackMode}
+        setFeedbackMode={setFeedbackMode}
+        selectedLikeReasons={selectedLikeReasons}
+        setSelectedLikeReasons={setSelectedLikeReasons}
+        commentOpen={commentOpen}
+        setCommentOpen={setCommentOpen}
+        comment={comment}
+        setComment={setComment}
+        onReject={handleReject}
+        onLike={handleLike}
+        onSetStatus={handleSetStatus}
+      />
 
       {/* Ошибка */}
       {error && (
@@ -750,6 +736,245 @@ function MarketScenariosBlock({ scenarios }: { scenarios: MarketScenarios }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const REJECT_REASONS = [
+  { code: "vague", label: "Абстрактно", emoji: "🌫️" },
+  { code: "crowded", label: "Уже есть решения", emoji: "🏪" },
+  { code: "not_my_profile", label: "Не моё", emoji: "🚫" },
+  { code: "bad_economics", label: "Не сойдётся", emoji: "📉" },
+  { code: "boring", label: "Не цепляет", emoji: "😴" },
+];
+
+const LIKE_REASONS = [
+  { code: "real_pain", label: "Боль реальная", emoji: "🎯" },
+  { code: "easy_start", label: "Быстрый старт", emoji: "🚀" },
+  { code: "clear_audience", label: "Понятно кому", emoji: "👥" },
+  { code: "good_money", label: "Деньги понятны", emoji: "💰" },
+];
+
+function FeedbackBlock({
+  idea,
+  feedbackMode,
+  setFeedbackMode,
+  selectedLikeReasons,
+  setSelectedLikeReasons,
+  commentOpen,
+  setCommentOpen,
+  comment,
+  setComment,
+  onReject,
+  onLike,
+  onSetStatus,
+}: {
+  idea: IdeaDTO;
+  feedbackMode: "none" | "like" | "reject";
+  setFeedbackMode: (m: "none" | "like" | "reject") => void;
+  selectedLikeReasons: string[];
+  setSelectedLikeReasons: (r: string[]) => void;
+  commentOpen: boolean;
+  setCommentOpen: (o: boolean) => void;
+  comment: string;
+  setComment: (c: string) => void;
+  onReject: (reason: string) => void;
+  onLike: () => void;
+  onSetStatus: (status: string, extra?: Record<string, unknown>) => void;
+}) {
+  // Уже оценено — показываем результат
+  if (idea.userStatus === "rejected" && idea.rejectReason) {
+    const reason = REJECT_REASONS.find((r) => r.code === idea.rejectReason);
+    return (
+      <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: "var(--destructive-light, #ff000010)", border: "1px solid var(--destructive)" }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span>{reason?.emoji || "❌"}</span>
+            <span className="text-sm font-medium">Отброшена: {reason?.label || idea.rejectReason}</span>
+          </div>
+          <button
+            onClick={() => onSetStatus("new", { rejectReason: null, likeReasons: null, feedbackComment: null })}
+            className="cursor-pointer text-xs underline"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            Сбросить
+          </button>
+        </div>
+        {idea.feedbackComment && (
+          <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>{idea.feedbackComment}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (idea.userStatus === "interesting" && idea.likeReasons && idea.likeReasons.length > 0) {
+    return (
+      <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: "var(--primary-light, #0071e310)", border: "1px solid var(--primary)" }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">Интересно:</span>
+            {idea.likeReasons.map((code) => {
+              const reason = LIKE_REASONS.find((r) => r.code === code);
+              return (
+                <span key={code} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--primary)", color: "#fff" }}>
+                  {reason?.emoji} {reason?.label || code}
+                </span>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => onSetStatus("new", { rejectReason: null, likeReasons: null, feedbackComment: null })}
+            className="cursor-pointer text-xs underline"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            Сбросить
+          </button>
+        </div>
+        {idea.feedbackComment && (
+          <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>{idea.feedbackComment}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (idea.userStatus === "in_progress") {
+    return (
+      <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: "var(--success-light, #00c85310)", border: "1px solid var(--success)" }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span>🚧</span>
+            <span className="text-sm font-medium">В работе</span>
+          </div>
+          <button
+            onClick={() => onSetStatus("new", { rejectReason: null, likeReasons: null, feedbackComment: null })}
+            className="cursor-pointer text-xs underline"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            Сбросить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Не оценено — показываем кнопки действий
+  return (
+    <div className="mb-6">
+      {/* Основные кнопки */}
+      {feedbackMode === "none" && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFeedbackMode("like")}
+            className="cursor-pointer rounded-2xl px-5 py-2.5 text-sm font-medium transition-all hover:scale-[1.02]"
+            style={{ backgroundColor: "var(--primary)", color: "#fff" }}
+          >
+            👍 Интересно
+          </button>
+          <button
+            onClick={() => setFeedbackMode("reject")}
+            className="cursor-pointer rounded-2xl px-5 py-2.5 text-sm font-medium transition-all hover:scale-[1.02]"
+            style={{ backgroundColor: "var(--muted)", color: "var(--foreground)" }}
+          >
+            👎 Отбросить
+          </button>
+          <button
+            onClick={() => setCommentOpen(!commentOpen)}
+            className="cursor-pointer rounded-2xl px-3 py-2.5 text-sm transition-all hover:scale-[1.05]"
+            style={{ backgroundColor: "var(--muted)", color: "var(--muted-foreground)" }}
+            title="Комментарий"
+          >
+            💬
+          </button>
+        </div>
+      )}
+
+      {/* Причины одобрения — мультиселект */}
+      {feedbackMode === "like" && (
+        <div className="animate-fade-in">
+          <div className="mb-2 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Чем зацепило?</div>
+          <div className="flex flex-wrap gap-2">
+            {LIKE_REASONS.map((r) => {
+              const selected = selectedLikeReasons.includes(r.code);
+              return (
+                <button
+                  key={r.code}
+                  onClick={() => {
+                    setSelectedLikeReasons(
+                      selected
+                        ? selectedLikeReasons.filter((c) => c !== r.code)
+                        : [...selectedLikeReasons, r.code]
+                    );
+                  }}
+                  className="cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: selected ? "var(--primary)" : "var(--muted)",
+                    color: selected ? "#fff" : "var(--foreground)",
+                  }}
+                >
+                  {r.emoji} {r.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={onLike}
+              className="cursor-pointer rounded-2xl px-4 py-2 text-xs font-medium transition-all hover:scale-[1.02]"
+              style={{ backgroundColor: "var(--primary)", color: "#fff" }}
+            >
+              Готово
+            </button>
+            <button
+              onClick={() => { setFeedbackMode("none"); setSelectedLikeReasons([]); }}
+              className="cursor-pointer text-xs"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Причины отклонения — одиночный выбор */}
+      {feedbackMode === "reject" && (
+        <div className="animate-fade-in">
+          <div className="mb-2 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Почему не подходит?</div>
+          <div className="flex flex-wrap gap-2">
+            {REJECT_REASONS.map((r) => (
+              <button
+                key={r.code}
+                onClick={() => onReject(r.code)}
+                className="cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium transition-all hover:scale-[1.02]"
+                style={{ backgroundColor: "var(--muted)", color: "var(--foreground)" }}
+              >
+                {r.emoji} {r.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setFeedbackMode("none")}
+            className="mt-2 cursor-pointer text-xs"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            Отмена
+          </button>
+        </div>
+      )}
+
+      {/* Комментарий */}
+      {commentOpen && feedbackMode === "none" && (
+        <div className="mt-3 animate-fade-in">
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Если причина не из списка — напиши в 2-3 словах"
+            className="w-full rounded-xl border p-3 text-sm"
+            style={{ backgroundColor: "var(--card)", borderColor: "var(--muted)", color: "var(--foreground)" }}
+            rows={2}
+            maxLength={500}
+          />
         </div>
       )}
     </div>

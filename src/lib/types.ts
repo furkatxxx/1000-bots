@@ -158,6 +158,9 @@ export interface IdeaDTO {
   adCopy: string | null;
   userStatus: string;
   rating: number | null;
+  rejectReason: string | null;
+  likeReasons: string[] | null;
+  feedbackComment: string | null;
   isFavorite: boolean;
   isArchived: boolean;
   createdAt: string;

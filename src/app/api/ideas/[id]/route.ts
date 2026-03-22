@@ -26,12 +26,6 @@ export async function PATCH(
 
     const data: Record<string, unknown> = {};
 
-    if (typeof body.rating === "number" && body.rating >= 1 && body.rating <= 5) {
-      data.rating = body.rating;
-    }
-    if (body.rating === null) {
-      data.rating = null;
-    }
     if (typeof body.isFavorite === "boolean") {
       data.isFavorite = body.isFavorite;
     }
@@ -40,6 +34,32 @@ export async function PATCH(
     }
     if (typeof body.userStatus === "string" && ["new", "interesting", "in_progress", "rejected"].includes(body.userStatus)) {
       data.userStatus = body.userStatus;
+    }
+
+    // Обратная связь: причина отклонения
+    const validRejectReasons = ["vague", "crowded", "not_my_profile", "bad_economics", "boring"];
+    if (typeof body.rejectReason === "string" && validRejectReasons.includes(body.rejectReason)) {
+      data.rejectReason = body.rejectReason;
+    }
+    if (body.rejectReason === null) {
+      data.rejectReason = null;
+    }
+
+    // Обратная связь: причины одобрения (мультиселект)
+    const validLikeReasons = ["real_pain", "easy_start", "clear_audience", "good_money"];
+    if (Array.isArray(body.likeReasons) && body.likeReasons.every((r: unknown) => typeof r === "string" && validLikeReasons.includes(r as string))) {
+      data.likeReasons = JSON.stringify(body.likeReasons);
+    }
+    if (body.likeReasons === null) {
+      data.likeReasons = null;
+    }
+
+    // Свободный комментарий
+    if (typeof body.feedbackComment === "string") {
+      data.feedbackComment = body.feedbackComment.slice(0, 500);
+    }
+    if (body.feedbackComment === null) {
+      data.feedbackComment = null;
     }
 
     if (Object.keys(data).length === 0) {
@@ -64,11 +84,17 @@ export async function PATCH(
       try { marketScenarios = JSON.parse(updated.marketScenarios); } catch { /* skip */ }
     }
 
+    let likeReasons = null;
+    if (updated.likeReasons) {
+      try { likeReasons = JSON.parse(updated.likeReasons); } catch { /* skip */ }
+    }
+
     return NextResponse.json({
       idea: {
         ...updated,
         expertAnalysis,
         marketScenarios,
+        likeReasons,
         createdAt: updated.createdAt.toISOString(),
       },
     });
@@ -108,12 +134,18 @@ export async function GET(
       try { marketScenarios = JSON.parse(idea.marketScenarios); } catch { /* skip */ }
     }
 
+    let likeReasons = null;
+    if (idea.likeReasons) {
+      try { likeReasons = JSON.parse(idea.likeReasons); } catch { /* skip */ }
+    }
+
     return NextResponse.json({
       idea: {
         ...idea,
         reportDate: idea.report.date.toISOString(),
         expertAnalysis,
         marketScenarios,
+        likeReasons,
         // Не передаём тяжёлые данные целиком — только флаги наличия
         landingHtml: idea.landingHtml ? "[html]" : null,
         analogs: idea.analogs || null,
