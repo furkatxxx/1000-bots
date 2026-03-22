@@ -36,26 +36,36 @@ export class RedditCollector implements TrendCollector {
   }
 
   private async fetchSubreddit(subreddit: string, weight: number): Promise<TrendItem[]> {
-    try {
-      const url = `https://www.reddit.com/r/${subreddit}/hot.rss`;
-      const res = await fetchWithTimeout(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-          Accept: "application/atom+xml, application/xml, text/xml",
-        },
-      });
+    // old.reddit.com меньше блокирует серверные IP
+    const urls = [
+      `https://old.reddit.com/r/${subreddit}/hot.rss`,
+      `https://www.reddit.com/r/${subreddit}/hot.rss`,
+    ];
+    const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-      if (!res.ok) {
-        console.warn(`[Reddit] r/${subreddit} вернул ${res.status}`);
-        return [];
+    for (const url of urls) {
+      try {
+        const res = await fetchWithTimeout(url, {
+          headers: {
+            "User-Agent": ua,
+            Accept: "application/atom+xml, application/xml, text/xml",
+          },
+        });
+
+        if (!res.ok) {
+          console.warn(`[Reddit] r/${subreddit} вернул ${res.status} (${url})`);
+          continue;
+        }
+
+        const xml = await res.text();
+        const items = this.parseAtom(xml, subreddit, weight);
+        if (items.length > 0) return items;
+      } catch (err) {
+        console.warn(`[Reddit] r/${subreddit} ошибка (${url}):`, err);
+        continue;
       }
-
-      const xml = await res.text();
-      return this.parseAtom(xml, subreddit, weight);
-    } catch (err) {
-      console.error(`[Reddit] r/${subreddit} ошибка:`, err);
-      return [];
     }
+    return [];
   }
 
   private parseAtom(xml: string, subreddit: string, weight: number): TrendItem[] {

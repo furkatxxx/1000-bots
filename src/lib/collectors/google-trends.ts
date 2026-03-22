@@ -22,26 +22,38 @@ export class GoogleTrendsCollector implements TrendCollector {
   }
 
   async collect(): Promise<TrendItem[]> {
-    try {
-      const url = `https://trends.google.com/trending/rss?geo=${this.geo}`;
-      const res = await fetchWithTimeout(url, {
-        headers: {
-          "User-Agent": "1000bots/1.0 (business trend collector)",
-          Accept: "application/rss+xml, application/xml, text/xml",
-        },
-      });
+    const userAgents = [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
+      "Mozilla/5.0 (X11; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0",
+    ];
 
-      if (!res.ok) {
-        console.error(`[GoogleTrends] RSS вернул ${res.status}`);
-        return [];
+    for (const ua of userAgents) {
+      try {
+        const url = `https://trends.google.com/trending/rss?geo=${this.geo}`;
+        const res = await fetchWithTimeout(url, {
+          headers: {
+            "User-Agent": ua,
+            Accept: "application/rss+xml, application/xml, text/xml",
+          },
+        });
+
+        if (!res.ok) {
+          console.warn(`[GoogleTrends] RSS вернул ${res.status}, пробую другой UA...`);
+          continue;
+        }
+
+        const xml = await res.text();
+        const items = this.parseRSS(xml);
+        if (items.length > 0) return items;
+      } catch (err) {
+        console.warn("[GoogleTrends] Ошибка, пробую другой UA:", err);
+        continue;
       }
-
-      const xml = await res.text();
-      return this.parseRSS(xml);
-    } catch (err) {
-      console.error("[GoogleTrends] Ошибка сбора:", err);
-      return [];
     }
+
+    console.error("[GoogleTrends] Все попытки провалились");
+    return [];
   }
 
   private parseRSS(xml: string): TrendItem[] {

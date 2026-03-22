@@ -40,8 +40,8 @@ export const SOURCE_LABELS: Record<string, string> = {
 };
 
 // Минимальный процент работающих источников для генерации отчёта
-// Если сломано 40%+ источников — генерация отменяется
-export const MIN_HEALTHY_PERCENT = 60;
+// Google Trends и Reddit нестабильны с серверов — достаточно 1 из 4
+export const MIN_HEALTHY_PERCENT = 25;
 
 // Проверка одного источника с замером времени
 async function checkSource(
@@ -71,13 +71,15 @@ export async function runHealthCheck(
 ): Promise<HealthCheckResult> {
   const checks: Promise<SourceCheck>[] = [];
 
+  const browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
   // 1. Google Trends (без ключа)
   checks.push(
     checkSource("google_trends", "Google Trends", async () => {
       const geo = settings.googleTrendsGeo || "RU";
       const r = await fetchWithTimeout(
         `https://trends.google.com/trending/rss?geo=${geo}`,
-        { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }
+        { headers: { "User-Agent": browserUA, Accept: "application/rss+xml, application/xml, text/xml" } }
       );
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const xml = await r.text();
@@ -85,17 +87,12 @@ export async function runHealthCheck(
     })
   );
 
-  // 2. Reddit (без ключа)
+  // 2. Reddit (без ключа) — old.reddit.com меньше блокирует
   checks.push(
     checkSource("reddit", "Reddit", async () => {
       const r = await fetchWithTimeout(
-        "https://www.reddit.com/r/microsaas/hot.rss",
-        {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-          },
-        }
+        "https://old.reddit.com/r/microsaas/hot.rss",
+        { headers: { "User-Agent": browserUA, Accept: "application/atom+xml, application/xml, text/xml" } }
       );
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const xml = await r.text();
