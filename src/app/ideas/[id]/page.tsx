@@ -785,7 +785,7 @@ function FeedbackBlock({
   onSetStatus: (status: string, extra?: Record<string, unknown>) => void;
 }) {
   // Уже оценено — показываем результат
-  if (idea.userStatus === "rejected" && idea.rejectReason) {
+  if (idea.userStatus === "rejected") {
     const reason = REJECT_REASONS.find((r) => r.code === idea.rejectReason);
     return (
       <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: "var(--destructive-light, #ff000010)", border: "1px solid var(--destructive)" }}>
@@ -809,13 +809,13 @@ function FeedbackBlock({
     );
   }
 
-  if (idea.userStatus === "interesting" && idea.likeReasons && idea.likeReasons.length > 0) {
+  if (idea.userStatus === "interesting") {
     return (
       <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: "var(--primary-light, #0071e310)", border: "1px solid var(--primary)" }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium">Интересно:</span>
-            {idea.likeReasons.map((code) => {
+            <span className="text-sm font-medium">Интересно</span>
+            {idea.likeReasons && idea.likeReasons.map((code) => {
               const reason = LIKE_REASONS.find((r) => r.code === code);
               return (
                 <span key={code} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "var(--primary)", color: "#fff" }}>
@@ -824,13 +824,22 @@ function FeedbackBlock({
               );
             })}
           </div>
-          <button
-            onClick={() => onSetStatus("new", { rejectReason: null, likeReasons: null, feedbackComment: null })}
-            className="cursor-pointer text-xs underline"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            Сбросить
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onSetStatus("in_progress")}
+              className="cursor-pointer rounded-full px-3 py-1 text-xs font-medium"
+              style={{ backgroundColor: "var(--success)", color: "#fff" }}
+            >
+              В работе
+            </button>
+            <button
+              onClick={() => onSetStatus("new", { rejectReason: null, likeReasons: null, feedbackComment: null })}
+              className="cursor-pointer text-xs underline"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              Сбросить
+            </button>
+          </div>
         </div>
         {idea.feedbackComment && (
           <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>{idea.feedbackComment}</p>

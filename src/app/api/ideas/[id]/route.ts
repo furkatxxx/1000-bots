@@ -72,6 +72,7 @@ export async function PATCH(
     const updated = await prisma.businessIdea.update({
       where: { id },
       data,
+      include: { report: { select: { date: true } } },
     });
 
     let expertAnalysis = null;
@@ -92,9 +93,11 @@ export async function PATCH(
     return NextResponse.json({
       idea: {
         ...updated,
+        reportDate: updated.report.date.toISOString(),
         expertAnalysis,
         marketScenarios,
         likeReasons,
+        landingHtml: updated.landingHtml ? "[html]" : null,
         createdAt: updated.createdAt.toISOString(),
       },
     });
