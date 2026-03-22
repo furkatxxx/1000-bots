@@ -514,15 +514,25 @@ export async function runStage3(reportId: string): Promise<Stage3Result> {
 // ═══════════════════════════════════════════════════
 
 export async function runFullPipeline(reportId: string): Promise<{ success: boolean; error?: string; ideasCount?: number; trendsCount?: number }> {
-  // Этап 1
+  // Этап 1: Сбор трендов + анализ
   const s1 = await runStage1(reportId);
   if (!s1.success) return { success: false, error: `Этап 1: ${s1.error}` };
 
-  // Этап 2
+  // Этап 2: Генерация концептов
   const s2 = await runStage2(reportId);
   if (!s2.success) return { success: false, error: `Этап 2: ${s2.error}` };
 
-  // Этап 3
+  // Этап 2-deep: Глубокий анализ каждого концепта (по одному за вызов)
+  const MAX_DEEP_ITERATIONS = 15; // защита от бесконечного цикла
+  for (let i = 0; i < MAX_DEEP_ITERATIONS; i++) {
+    const report = await prisma.dailyReport.findUnique({ where: { id: reportId } });
+    if (report?.pipelineStage === "stage-2-done") break;
+
+    const deep = await runStage2Deep(reportId);
+    if (!deep.success) return { success: false, error: `Этап 2-deep: ${deep.error}` };
+  }
+
+  // Этап 3: Финализация
   const s3 = await runStage3(reportId);
   if (!s3.success) return { success: false, error: `Этап 3: ${s3.error}` };
 
