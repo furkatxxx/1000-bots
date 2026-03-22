@@ -26,16 +26,25 @@ export interface TasteProfile {
 
 // Собирает профиль вкуса из всех оценок в БД
 export async function buildTasteProfile(): Promise<TasteProfile> {
-  // Все идеи с обратной связью
-  const rejected = await prisma.businessIdea.findMany({
-    where: { rejectReason: { not: null } },
-    select: { rejectReason: true, feedbackComment: true },
-  });
+  const empty: TasteProfile = { totalFeedback: 0, rejectCounts: {}, likeCounts: {}, promptBlock: null };
 
-  const liked = await prisma.businessIdea.findMany({
-    where: { likeReasons: { not: null } },
-    select: { likeReasons: true, feedbackComment: true },
-  });
+  // try/catch — колонки могут ещё не существовать в БД (до db push)
+  let rejected: { rejectReason: string | null; feedbackComment: string | null }[];
+  let liked: { likeReasons: string | null; feedbackComment: string | null }[];
+  try {
+    rejected = await prisma.businessIdea.findMany({
+      where: { rejectReason: { not: null } },
+      select: { rejectReason: true, feedbackComment: true },
+    });
+
+    liked = await prisma.businessIdea.findMany({
+      where: { likeReasons: { not: null } },
+      select: { likeReasons: true, feedbackComment: true },
+    });
+  } catch (err) {
+    console.warn("[TasteProfile] Колонки обратной связи ещё не добавлены в БД:", err);
+    return empty;
+  }
 
   const totalFeedback = rejected.length + liked.length;
 
