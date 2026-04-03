@@ -36,6 +36,7 @@ npm run dev
 - `prisma/` — схема БД
 
 ## Правила
+- Перед любыми изменениями в коде — сделать резервную копию: `tar -czf /home/user/1000-bots-BACKUP-$(date +%Y-%m-%d).tar.gz --exclude='node_modules' --exclude='.next' 1000-bots/`
 - Дизайн в стиле Apple (CSS-переменные, скруглённые углы, тени)
 - React.memo() на всех UI-компонентах
 - Лимиты: UI < 200 строк, роуты < 300, сервисы < 400
